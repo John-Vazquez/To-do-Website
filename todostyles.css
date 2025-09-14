@@ -1,7 +1,7 @@
 body {
   margin: 0;
   font-family: Arial, sans-serif;
-  background: #ecf0f1;
+  background: #f5f5f5;
   color: #2c3e50;
   display: flex;
   flex-direction: column;
@@ -16,17 +16,31 @@ header {
 }
 
 .todo-container {
-  padding: 2rem;
-  max-width: 700px;
+  padding: 1rem;
+  max-width: 1200px;
   margin: 0 auto;
+}
+
+/* Toggle button */
+.view-toggle {
+  text-align: right;
+  margin: 10px 0;
+}
+.view-toggle button {
+  background: #4CAF50;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.view-toggle button:hover {
+  background: #45a049;
 }
 
 .list-box {
   margin-bottom: 2rem;
-}
-
-.list-box h2 {
-  margin-bottom: 0.5rem;
 }
 
 .task-box {
@@ -34,23 +48,40 @@ header {
   border-radius: 8px;
   padding: 1rem;
   box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-}
-
-#doing-form {
-  display: flex;
-  gap: 0.5rem;
   margin-bottom: 1rem;
 }
 
-#doing-input {
+.task-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+/* Compact (default) = 4 per row */
+.task-section .task-box {
+  flex: 1 1 calc(25% - 1rem);
+}
+
+/* Expanded = 2 per row */
+.expanded .task-section .task-box {
+  flex: 1 1 calc(50% - 1rem);
+}
+
+.task-box form {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.task-box input {
   flex: 1;
-  padding: 0.5rem;
+  padding: 0.4rem;
   border-radius: 6px;
   border: 1px solid #ccc;
 }
 
-#doing-form button {
-  padding: 0.5rem 1rem;
+.task-box button {
+  padding: 0.4rem 0.8rem;
   border: none;
   background: #2ecc71;
   color: white;
@@ -58,72 +89,47 @@ header {
   cursor: pointer;
 }
 
-#doing-list {
+ul {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-#doing-list li {
-  background: #3498db;
-  color: white;
-  padding: 0.6rem;
-  border-radius: 6px;
+.task-item {
+  background: #fff;
+  border: 1px solid #000;
+  border-radius: 50px;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  display: grid;
+  grid-template-columns: 1fr 100px auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.task-col {
+  font-size: .9rem;
+  color: #000;
+  padding-right: .6rem;
+  border-right: 2px solid #000;
+  overflow-wrap: anywhere;
+  height: 100%;
   display: flex;
-  justify-content: space-between;
   align-items: center;
 }
 
-#doing-list button {
-  margin-left: 0.5rem;
-  background: #e74c3c;
+.due-col {
+  font-size: .9rem;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.done {
+  background: none;
   border: none;
-  color: white;
-  padding: 0.3rem 0.6rem;
-  border-radius: 6px;
+  color: red;
+  font-size: 1rem;
   cursor: pointer;
-}
-
-.todo-container {
-  padding: 2rem;
-  max-width: 700px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center; /* center child boxes */
-}
-
-.list-box {
-  width: 100%;
-  max-width: 400px;  /* keep it a good readable width */
-  margin-bottom: 2rem;
-}
-
-.task-box {
-  background: white;
-  border-radius: 8px;
-  padding: 1rem;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-  width: 100%;
-}
-
-#doing-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.class-lists {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
-  margin-top: 1rem;
-}
-
-.class-lists .task-box {
-  background: white;
-  border-radius: 8px;
-  padding: 1rem;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
 }

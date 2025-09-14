@@ -2,18 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>To-Do List</title>
-
-  <!-- Supabase client -->
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-
-  <!-- CSS -->
+  <title>To-Do Web App</title>
   <link rel="stylesheet" href="todostyles.css">
+  <script src="https://unpkg.com/@supabase/supabase-js"></script>
+  <script defer src="todo.js"></script>
 </head>
 <body>
   <header>
-    My To-Do Lists
-    <div><a href="index.html">← Back</a></div>
+    <h1>To-Do Web App</h1>
   </header>
 
   <div class="todo-container">
@@ -22,10 +18,10 @@
     <div class="list-box">
       <h2>Doing Right Now</h2>
       <div class="task-box">
-        <form onsubmit="event.preventDefault(); addTask(LIST_IDS.doing, 'doingInput','doingDate','doingList');">
-          <input type="text" id="doingInput" placeholder="What are you doing now?">
-          <input type="text" id="doingDate" placeholder="Optional due date">
-          <button type="submit">Set</button>
+        <form onsubmit="addTask(LIST_IDS.doing,'doingInput','doingDate','doingList');return false;">
+          <input id="doingInput" placeholder="Enter task">
+          <input id="doingDate" placeholder="MM/DD">
+          <button type="submit">Add</button>
         </form>
         <ul id="doingList"></ul>
       </div>
@@ -33,128 +29,103 @@
 
     <!-- Must Do Today -->
     <div class="list-box">
-      <h2>Must Do Today (Max 3)</h2>
+      <h2>Must Do Today</h2>
       <div class="task-box">
-        <form onsubmit="event.preventDefault(); addTask(LIST_IDS.must, 'mustInput','mustDate','mustList',3);">
-          <input type="text" id="mustInput" placeholder="Must do item">
-          <input type="text" id="mustDate" placeholder="Optional due date">
+        <form onsubmit="addTask(LIST_IDS.must,'mustInput','mustDate','mustList',3);return false;">
+          <input id="mustInput" placeholder="Enter task">
+          <input id="mustDate" placeholder="MM/DD">
           <button type="submit">Add</button>
         </form>
         <ul id="mustList"></ul>
       </div>
     </div>
 
+    <!-- Expand/Collapse toggle -->
+    <div class="view-toggle">
+      <button id="toggleViewBtn">🔍 Expand View</button>
+    </div>
+
     <!-- Class Lists -->
-    <div class="list-box">
-      <h2>Class Lists</h2>
-      <div class="class-lists">
-
-        <div class="task-box">
-          <h3>Discrete II</h3>
-          <form onsubmit="event.preventDefault(); addTask(LIST_IDS.discrete,'discreteInput','discreteDate','discreteList');">
-            <input type="text" id="discreteInput" placeholder="Add task">
-            <input type="text" id="discreteDate" placeholder="Optional due date">
-            <button type="submit">Add</button>
-          </form>
-          <ul id="discreteList"></ul>
-        </div>
-
-        <div class="task-box">
-          <h3>Calc III</h3>
-          <form onsubmit="event.preventDefault(); addTask(LIST_IDS.calc,'calcInput','calcDate','calcList');">
-            <input type="text" id="calcInput" placeholder="Add task">
-            <input type="text" id="calcDate" placeholder="Optional due date">
-            <button type="submit">Add</button>
-          </form>
-          <ul id="calcList"></ul>
-        </div>
-
-        <div class="task-box">
-          <h3>Cyber Analysis</h3>
-          <form onsubmit="event.preventDefault(); addTask(LIST_IDS.cyber,'cyberInput','cyberDate','cyberList');">
-            <input type="text" id="cyberInput" placeholder="Add task">
-            <input type="text" id="cyberDate" placeholder="Optional due date">
-            <button type="submit">Add</button>
-          </form>
-          <ul id="cyberList"></ul>
-        </div>
-
-        <div class="task-box">
-          <h3>Topics in Cyber</h3>
-          <form onsubmit="event.preventDefault(); addTask(LIST_IDS.topics,'topicsInput','topicsDate','topicsList');">
-            <input type="text" id="topicsInput" placeholder="Add task">
-            <input type="text" id="topicsDate" placeholder="Optional due date">
-            <button type="submit">Add</button>
-          </form>
-          <ul id="topicsList"></ul>
-        </div>
-
+    <h2>Class Lists</h2>
+    <div class="task-section">
+      <div class="task-box">
+        <h3>Discrete II</h3>
+        <form onsubmit="addTask(LIST_IDS.discrete,'discreteInput','discreteDate','discreteList');return false;">
+          <input id="discreteInput" placeholder="Enter task">
+          <input id="discreteDate" placeholder="MM/DD">
+          <button type="submit">Add</button>
+        </form>
+        <ul id="discreteList"></ul>
+      </div>
+      <div class="task-box">
+        <h3>Calc III</h3>
+        <form onsubmit="addTask(LIST_IDS.calc,'calcInput','calcDate','calcList');return false;">
+          <input id="calcInput" placeholder="Enter task">
+          <input id="calcDate" placeholder="MM/DD">
+          <button type="submit">Add</button>
+        </form>
+        <ul id="calcList"></ul>
+      </div>
+      <div class="task-box">
+        <h3>Cyber Analysis</h3>
+        <form onsubmit="addTask(LIST_IDS.cyber,'cyberInput','cyberDate','cyberList');return false;">
+          <input id="cyberInput" placeholder="Enter task">
+          <input id="cyberDate" placeholder="MM/DD">
+          <button type="submit">Add</button>
+        </form>
+        <ul id="cyberList"></ul>
+      </div>
+      <div class="task-box">
+        <h3>Topics in Cyber</h3>
+        <form onsubmit="addTask(LIST_IDS.topics,'topicsInput','topicsDate','topicsList');return false;">
+          <input id="topicsInput" placeholder="Enter task">
+          <input id="topicsDate" placeholder="MM/DD">
+          <button type="submit">Add</button>
+        </form>
+        <ul id="topicsList"></ul>
       </div>
     </div>
 
     <!-- Other Important Lists -->
-    <div class="list-box">
-      <h2>Other Important Lists</h2>
-      <div class="class-lists">
-
-        <div class="task-box">
-          <h3>
-            <span id="otherTitle1">Important 1</span>
-            <button type="button" onclick="editTitle('otherTitle1', LIST_IDS.other1)">✏️</button>
-          </h3>
-          <form onsubmit="event.preventDefault(); addTask(LIST_IDS.other1,'otherInput1','otherDate1','otherList1');">
-            <input type="text" id="otherInput1" placeholder="Add task">
-            <input type="text" id="otherDate1" placeholder="Optional due date">
-            <button type="submit">Add</button>
-          </form>
-          <ul id="otherList1"></ul>
-        </div>
-
-        <div class="task-box">
-          <h3>
-            <span id="otherTitle2">Important 2</span>
-            <button type="button" onclick="editTitle('otherTitle2', LIST_IDS.other2)">✏️</button>
-          </h3>
-          <form onsubmit="event.preventDefault(); addTask(LIST_IDS.other2,'otherInput2','otherDate2','otherList2');">
-            <input type="text" id="otherInput2" placeholder="Add task">
-            <input type="text" id="otherDate2" placeholder="Optional due date">
-            <button type="submit">Add</button>
-          </form>
-          <ul id="otherList2"></ul>
-        </div>
-
-        <div class="task-box">
-          <h3>
-            <span id="otherTitle3">Important 3</span>
-            <button type="button" onclick="editTitle('otherTitle3', LIST_IDS.other3)">✏️</button>
-          </h3>
-          <form onsubmit="event.preventDefault(); addTask(LIST_IDS.other3,'otherInput3','otherDate3','otherList3');">
-            <input type="text" id="otherInput3" placeholder="Add task">
-            <input type="text" id="otherDate3" placeholder="Optional due date">
-            <button type="submit">Add</button>
-          </form>
-          <ul id="otherList3"></ul>
-        </div>
-
-        <div class="task-box">
-          <h3>
-            <span id="otherTitle4">Important 4</span>
-            <button type="button" onclick="editTitle('otherTitle4', LIST_IDS.other4)">✏️</button>
-          </h3>
-          <form onsubmit="event.preventDefault(); addTask(LIST_IDS.other4,'otherInput4','otherDate4','otherList4');">
-            <input type="text" id="otherInput4" placeholder="Add task">
-            <input type="text" id="otherDate4" placeholder="Optional due date">
-            <button type="submit">Add</button>
-          </form>
-          <ul id="otherList4"></ul>
-        </div>
-
+    <h2>Other Important Lists</h2>
+    <div class="task-section">
+      <div class="task-box">
+        <h3><span id="otherTitle1" onclick="editTitle('otherTitle1',LIST_IDS.other1)">Important 1</span></h3>
+        <form onsubmit="addTask(LIST_IDS.other1,'otherInput1','otherDate1','otherList1');return false;">
+          <input id="otherInput1" placeholder="Enter task">
+          <input id="otherDate1" placeholder="MM/DD">
+          <button type="submit">Add</button>
+        </form>
+        <ul id="otherList1"></ul>
+      </div>
+      <div class="task-box">
+        <h3><span id="otherTitle2" onclick="editTitle('otherTitle2',LIST_IDS.other2)">Important 2</span></h3>
+        <form onsubmit="addTask(LIST_IDS.other2,'otherInput2','otherDate2','otherList2');return false;">
+          <input id="otherInput2" placeholder="Enter task">
+          <input id="otherDate2" placeholder="MM/DD">
+          <button type="submit">Add</button>
+        </form>
+        <ul id="otherList2"></ul>
+      </div>
+      <div class="task-box">
+        <h3><span id="otherTitle3" onclick="editTitle('otherTitle3',LIST_IDS.other3)">Important 3</span></h3>
+        <form onsubmit="addTask(LIST_IDS.other3,'otherInput3','otherDate3','otherList3');return false;">
+          <input id="otherInput3" placeholder="Enter task">
+          <input id="otherDate3" placeholder="MM/DD">
+          <button type="submit">Add</button>
+        </form>
+        <ul id="otherList3"></ul>
+      </div>
+      <div class="task-box">
+        <h3><span id="otherTitle4" onclick="editTitle('otherTitle4',LIST_IDS.other4)">Important 4</span></h3>
+        <form onsubmit="addTask(LIST_IDS.other4,'otherInput4','otherDate4','otherList4');return false;">
+          <input id="otherInput4" placeholder="Enter task">
+          <input id="otherDate4" placeholder="MM/DD">
+          <button type="submit">Add</button>
+        </form>
+        <ul id="otherList4"></ul>
       </div>
     </div>
-
   </div>
-
-  <!-- External JS -->
-  <script src="todo.js"></script>
 </body>
 </html>
