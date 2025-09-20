@@ -130,7 +130,8 @@ async function loadAllTasks() {
       .from("tasks")
       .select("*")
       .eq("list_id", listId)
-      .order("created_at");
+      .order("due_date", { ascending: true })
+
 
     if (error) { console.error(error); continue; }
 
