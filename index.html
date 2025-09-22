@@ -3,23 +3,54 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>My Dashboard</title>
+  <title>BAMN Studios</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header>
-    <h1>Welcome to My Dashboard</h1>
+  <header class="hero">
+    <h1>BAMN Studios</h1>
+    <p>Web Design & Development Portfolio</p>
   </header>
 
-  <main class="menu">
-    <a href="todo.html" class="card red">To-Do List</a>
-    <div class="card blue">Coming Soon</div>
-    <div class="card green">Coming Soon</div>
-    <div class="card yellow">Coming Soon</div>
+  <nav class="navbar">
+    <a href="index.html">Home</a>
+    <a href="personal.html">Personal</a>
+    <a href="projects.html">Projects</a>
+    <a href="#contact">Contact</a>
+  </nav>
+
+  <main>
+    <section class="intro">
+      <h2>Welcome</h2>
+      <p>I build clean, modern websites with a focus on performance and simplicity, and engineer automation systems designed to handle everything from simple processes to complex operations.</p>
+    </section>
+
+    <section id="projects" class="projects">
+      <h2>Featured Projects</h2>
+      <div class="project-grid">
+        <div class="project-card">
+          <h3>Portfolio</h3>
+          <p>My personal showcase of design and development work.</p>
+        </div>
+        <div class="project-card">
+          <h3>Web Apps</h3>
+          <p>Dynamic and responsive apps built with modern frameworks.</p>
+        </div>
+        <div class="project-card">
+          <h3>Client Work</h3>
+          <p>Custom solutions for small businesses and individuals.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="contact" class="contact">
+      <h2>Contact Me</h2>
+      <p>Email: <a href="mailto:your@email.com">your@email.com</a></p>
+    </section>
   </main>
 
   <footer>
-    <p>© 2025 My ADHD todo List</p>
+    <p>© 2025 BAMN Studios. All rights reserved.</p>
   </footer>
 </body>
 </html>
