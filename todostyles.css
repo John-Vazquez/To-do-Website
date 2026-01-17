@@ -73,6 +73,30 @@ header {
   margin-bottom: 0.5rem;
 }
 
+/* --- Due slot (Date / Urgency) --- */
+.due-slot {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.due-slot .due-mode {
+  flex: 0 0 44px;
+  width: 44px;
+  padding: 0.35rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background: #fff;
+  cursor: pointer;
+}
+
+.due-slot input {
+  flex: 1;
+  min-width: 0;
+}
+
 .task-box input {
   flex: 1;
   padding: 0.4rem;
@@ -102,7 +126,7 @@ ul {
   margin-bottom: 0.5rem;
   padding: 0.4rem 0.8rem;
   display: grid;
-  grid-template-columns: 1fr 100px auto;
+  grid-template-columns: 1fr 100px auto auto;
   align-items: center;
   gap: 0.5rem;
 }
@@ -133,3 +157,45 @@ ul {
   font-size: 1rem;
   cursor: pointer;
 }
+
+/* --- Icon buttons (override old big green done button) --- */
+.task-item .done,
+.task-item .edit {
+  background: #fff;          /* white so it blends into the card */
+  border: none;              /* no box outline */
+  padding: 6px 10px;         /* small clickable area */
+  border-radius: 8px;        /* soft */
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  width: auto !important;    /* kills old full-width styling */
+  height: auto !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none !important; /* kills any old shadow */
+}
+
+/* red X */
+.task-item .done {
+  color: #e53935;
+}
+
+/* pencil orange/yellow */
+.task-item .edit {
+  color: #f4b400;
+}
+
+/* optional: subtle hover without looking like a "box" */
+.task-item .done:hover,
+.task-item .edit:hover {
+  background: #fff;          /* stays white */
+  filter: brightness(0.9);   /* tiny feedback */
+}
+
+/* Force edit + delete icons to be vertically centered in grid */
+.task-item .done,
+.task-item .edit {
+  align-self: center;
+}
+

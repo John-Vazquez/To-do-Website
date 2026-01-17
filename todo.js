@@ -73,6 +73,39 @@ function parseFlexibleDate(s) {
   return isNaN(d2.getTime()) ? null : d2;
 }
 
+function parseUrgency(raw) {
+  const s = (raw ?? "").toString().trim();
+  if (!s) return null;
+  if (/^[1-3]$/.test(s)) return Number(s);
+  return null;
+}
+
+function getDueModeForInputId(inputId) {
+  const modeEl = document.getElementById(`${inputId}Mode`);
+  return (modeEl?.value || "date").toString();
+}
+
+// Keeps the "Date / Urgency" slot feeling like one control.
+function syncDueMode(modeSelectId, inputId) {
+  const modeEl = document.getElementById(modeSelectId);
+  const inputEl = document.getElementById(inputId);
+  if (!modeEl || !inputEl) return;
+
+  const mode = modeEl.value;
+  inputEl.value = "";
+  inputEl.dataset.mode = mode;
+
+  if (mode === "urgency") {
+    inputEl.placeholder = "1-3";
+    inputEl.inputMode = "numeric";
+    inputEl.maxLength = 1;
+  } else {
+    inputEl.placeholder = "MM/DD";
+    inputEl.removeAttribute("inputmode");
+    inputEl.removeAttribute("maxlength");
+  }
+}
+
 function ordinal(n) {
   if (n % 100 >= 11 && n % 100 <= 13) return n + "th";
   switch (n % 10) {
@@ -148,7 +181,9 @@ async function loadAllTasks() {
       .from("tasks")
       .select("*")
       .eq("list_id", listId)
-      .order("due_date", { ascending: true });
+      // Urgent items first, then dates.
+      .order("urgency", { ascending: false, nullsFirst: false })
+      .order("due_date", { ascending: true, nullsFirst: false });
 
     if (error) {
       console.error(error);
@@ -175,7 +210,13 @@ async function loadAllTasks() {
       const dueCol = document.createElement("div");
       dueCol.classList.add("due-col");
 
-      if (task.due_date) {
+      // Prefer urgency display if present; otherwise show date.
+      if (task.urgency) {
+        dueCol.textContent = `U${task.urgency}`;
+        if (task.urgency === 3) dueCol.style.color = "red";
+        else if (task.urgency === 2) dueCol.style.color = "orange";
+        else dueCol.style.color = "grey";
+      } else if (task.due_date) {
         const parsed = parseFlexibleDate(task.due_date);
 
         if (parsed) {
@@ -232,14 +273,22 @@ async function loadAllTasks() {
         const newContent = prompt("Edit task:", task.content ?? "");
         if (newContent === null) return; // user cancelled
 
-        const newDue = prompt("Edit due date (MM/DD or blank):", task.due_date ?? "");
-        if (newDue === null) return; // user cancelled
+        const existing = task.urgency ? String(task.urgency) : (task.due_date ?? "");
+        const newDueOrUrgency = prompt(
+          "Edit due date (MM/DD) OR urgency (1-3) OR blank:",
+          existing
+        );
+        if (newDueOrUrgency === null) return; // user cancelled
+
+        const u = parseUrgency(newDueOrUrgency);
+        const newDue = (u ? null : (newDueOrUrgency || "").trim() || null);
 
         const { error } = await supabaseClient
           .from("tasks")
           .update({
             content: newContent.trim(),
-            due_date: (newDue || "").trim() || null
+            due_date: newDue,
+            urgency: u
           })
           .eq("id", task.id);
 
@@ -274,7 +323,8 @@ async function addTask(listId, inputId, dateId, ulId, maxItems) {
   const dateEl  = document.getElementById(dateId);
 
   const content = (inputEl?.value || "").trim();
-  const rawDate = (dateEl?.value || "").trim(); // store mm/dd or blank
+  const raw = (dateEl?.value || "").trim(); // date text or urgency number
+  const mode = getDueModeForInputId(dateId);
 
   if (!content) return;
 
@@ -284,8 +334,21 @@ async function addTask(listId, inputId, dateId, ulId, maxItems) {
     return;
   }
 
+  let due_date = null;
+  let urgency = null;
+
+  if (mode === "urgency") {
+    urgency = parseUrgency(raw);
+    if (raw && urgency === null) {
+      alert("Urgency must be 1, 2, or 3.");
+      return;
+    }
+  } else {
+    due_date = raw || null;
+  }
+
   const { error } = await supabaseClient.from("tasks").insert([
-    { list_id: listId, content, due_date: rawDate || null }
+    { list_id: listId, content, due_date, urgency }
   ]);
 
   if (!error) {

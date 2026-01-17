@@ -20,7 +20,13 @@
       <div class="task-box">
         <form onsubmit="addTask(LIST_IDS.doing,'doingInput','doingDate','doingList');return false;">
           <input id="doingInput" placeholder="Enter task">
-          <input id="doingDate" placeholder="MM/DD">
+          <div class="due-slot">
+            <select id="doingDateMode" class="due-mode" onchange="syncDueMode('doingDateMode','doingDate')">
+              <option value="date" selected>📅</option>
+              <option value="urgency">⚡</option>
+            </select>
+            <input id="doingDate" placeholder="MM/DD" data-mode="date">
+          </div>
           <button type="submit">Add</button>
         </form>
         <ul id="doingList"></ul>
@@ -33,7 +39,13 @@
       <div class="task-box">
         <form onsubmit="addTask(LIST_IDS.must,'mustInput','mustDate','mustList',3);return false;">
           <input id="mustInput" placeholder="Enter task">
-          <input id="mustDate" placeholder="MM/DD">
+          <div class="due-slot">
+            <select id="mustDateMode" class="due-mode" onchange="syncDueMode('mustDateMode','mustDate')">
+              <option value="date" selected>📅</option>
+              <option value="urgency">⚡</option>
+            </select>
+            <input id="mustDate" placeholder="MM/DD" data-mode="date">
+          </div>
           <button type="submit">Add</button>
         </form>
         <ul id="mustList"></ul>
@@ -53,7 +65,13 @@
         <h3><span id="otherTitle1" onclick="editTitle('otherTitle1',LIST_IDS.other1)">Important 1</span></h3>
         <form onsubmit="addTask(LIST_IDS.other1,'otherInput1','otherDate1','otherList1');return false;">
           <input id="otherInput1" placeholder="Enter task">
-          <input id="otherDate1" placeholder="MM/DD">
+          <div class="due-slot">
+            <select id="otherDate1Mode" class="due-mode" onchange="syncDueMode('otherDate1Mode','otherDate1')">
+              <option value="date" selected>📅</option>
+              <option value="urgency">⚡</option>
+            </select>
+            <input id="otherDate1" placeholder="MM/DD" data-mode="date">
+          </div>
           <button type="submit">Add</button>
         </form>
         <ul id="otherList1"></ul>
@@ -62,7 +80,13 @@
         <h3><span id="otherTitle2" onclick="editTitle('otherTitle2',LIST_IDS.other2)">Important 2</span></h3>
         <form onsubmit="addTask(LIST_IDS.other2,'otherInput2','otherDate2','otherList2');return false;">
           <input id="otherInput2" placeholder="Enter task">
-          <input id="otherDate2" placeholder="MM/DD">
+          <div class="due-slot">
+            <select id="otherDate2Mode" class="due-mode" onchange="syncDueMode('otherDate2Mode','otherDate2')">
+              <option value="date" selected>📅</option>
+              <option value="urgency">⚡</option>
+            </select>
+            <input id="otherDate2" placeholder="MM/DD" data-mode="date">
+          </div>
           <button type="submit">Add</button>
         </form>
         <ul id="otherList2"></ul>
@@ -71,7 +95,13 @@
         <h3><span id="otherTitle3" onclick="editTitle('otherTitle3',LIST_IDS.other3)">Important 3</span></h3>
         <form onsubmit="addTask(LIST_IDS.other3,'otherInput3','otherDate3','otherList3');return false;">
           <input id="otherInput3" placeholder="Enter task">
-          <input id="otherDate3" placeholder="MM/DD">
+          <div class="due-slot">
+            <select id="otherDate3Mode" class="due-mode" onchange="syncDueMode('otherDate3Mode','otherDate3')">
+              <option value="date" selected>📅</option>
+              <option value="urgency">⚡</option>
+            </select>
+            <input id="otherDate3" placeholder="MM/DD" data-mode="date">
+          </div>
           <button type="submit">Add</button>
         </form>
         <ul id="otherList3"></ul>
@@ -80,7 +110,13 @@
         <h3><span id="otherTitle4" onclick="editTitle('otherTitle4',LIST_IDS.other4)">Important 4</span></h3>
         <form onsubmit="addTask(LIST_IDS.other4,'otherInput4','otherDate4','otherList4');return false;">
           <input id="otherInput4" placeholder="Enter task">
-          <input id="otherDate4" placeholder="MM/DD">
+          <div class="due-slot">
+            <select id="otherDate4Mode" class="due-mode" onchange="syncDueMode('otherDate4Mode','otherDate4')">
+              <option value="date" selected>📅</option>
+              <option value="urgency">⚡</option>
+            </select>
+            <input id="otherDate4" placeholder="MM/DD" data-mode="date">
+          </div>
           <button type="submit">Add</button>
         </form>
         <ul id="otherList4"></ul>
@@ -89,7 +125,13 @@
         <h3><span id="otherTitle5" onclick="editTitle('otherTitle5',LIST_IDS.other5)">Important 5</span></h3>
         <form onsubmit="addTask(LIST_IDS.other5,'otherInput5','otherDate5','otherList5');return false;">
           <input id="otherInput5" placeholder="Enter task">
-          <input id="otherDate5" placeholder="MM/DD">
+          <div class="due-slot">
+            <select id="otherDate5Mode" class="due-mode" onchange="syncDueMode('otherDate5Mode','otherDate5')">
+              <option value="date" selected>📅</option>
+              <option value="urgency">⚡</option>
+            </select>
+            <input id="otherDate5" placeholder="MM/DD" data-mode="date">
+          </div>
           <button type="submit">Add</button>
         </form>
         <ul id="otherList5"></ul>
@@ -99,7 +141,13 @@
         <h3><span id="otherTitle6" onclick="editTitle('otherTitle6',LIST_IDS.other6)">Important 6</span></h3>
         <form onsubmit="addTask(LIST_IDS.other6,'otherInput6','otherDate6','otherList6');return false;">
           <input id="otherInput6" placeholder="Enter task">
-          <input id="otherDate6" placeholder="MM/DD">
+          <div class="due-slot">
+            <select id="otherDate6Mode" class="due-mode" onchange="syncDueMode('otherDate6Mode','otherDate6')">
+              <option value="date" selected>📅</option>
+              <option value="urgency">⚡</option>
+            </select>
+            <input id="otherDate6" placeholder="MM/DD" data-mode="date">
+          </div>
           <button type="submit">Add</button>
         </form>
         <ul id="otherList6"></ul>
@@ -109,7 +157,13 @@
         <h3><span id="otherTitle7" onclick="editTitle('otherTitle7',LIST_IDS.other7)">Important 7</span></h3>
         <form onsubmit="addTask(LIST_IDS.other7,'otherInput7','otherDate7','otherList7');return false;">
           <input id="otherInput7" placeholder="Enter task">
-          <input id="otherDate7" placeholder="MM/DD">
+          <div class="due-slot">
+            <select id="otherDate7Mode" class="due-mode" onchange="syncDueMode('otherDate7Mode','otherDate7')">
+              <option value="date" selected>📅</option>
+              <option value="urgency">⚡</option>
+            </select>
+            <input id="otherDate7" placeholder="MM/DD" data-mode="date">
+          </div>
           <button type="submit">Add</button>
         </form>
         <ul id="otherList7"></ul>
@@ -119,7 +173,13 @@
         <h3><span id="otherTitle8" onclick="editTitle('otherTitle8',LIST_IDS.other8)">Important 8</span></h3>
         <form onsubmit="addTask(LIST_IDS.other8,'otherInput8','otherDate8','otherList8');return false;">
           <input id="otherInput8" placeholder="Enter task">
-          <input id="otherDate8" placeholder="MM/DD">
+          <div class="due-slot">
+            <select id="otherDate8Mode" class="due-mode" onchange="syncDueMode('otherDate8Mode','otherDate8')">
+              <option value="date" selected>📅</option>
+              <option value="urgency">⚡</option>
+            </select>
+            <input id="otherDate8" placeholder="MM/DD" data-mode="date">
+          </div>
           <button type="submit">Add</button>
         </form>
         <ul id="otherList8"></ul>
