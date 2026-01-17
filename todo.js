@@ -17,7 +17,11 @@ const LIST_IDS = {
   other1:   "32dd9a59-8fa4-45f3-a20f-e801549179d1",
   other2:   "2ff32464-e2a3-43c5-adfc-cbe17439ad7d",
   other3:   "63d46c8e-16f1-4c88-b4e8-09fdfa9e93fe",
-  other4:   "e88dc7fa-6815-4eb9-8d02-cd5c023d853f"
+  other4:   "e88dc7fa-6815-4eb9-8d02-cd5c023d853f",
+  other5: "f55cf27c-0226-4440-874e-c47b7294cbf3",
+  other6: "6715ee6e-5d0f-429d-959d-3b1ea829ccf4",
+  other7: "3f716ddf-bec1-43c1-8044-410571761697",
+  other8: "ab443152-9534-4647-8f51-ab1ffd3867ca"
 };
 
 // UL ids in the HTML
