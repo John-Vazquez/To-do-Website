@@ -18,10 +18,10 @@ const LIST_IDS = {
   other2:   "2ff32464-e2a3-43c5-adfc-cbe17439ad7d",
   other3:   "63d46c8e-16f1-4c88-b4e8-09fdfa9e93fe",
   other4:   "e88dc7fa-6815-4eb9-8d02-cd5c023d853f",
-  other5: "f55cf27c-0226-4440-874e-c47b7294cbf3",
-  other6: "6715ee6e-5d0f-429d-959d-3b1ea829ccf4",
-  other7: "3f716ddf-bec1-43c1-8044-410571761697",
-  other8: "ab443152-9534-4647-8f51-ab1ffd3867ca"
+  other5:   "f55cf27c-0226-4440-874e-c47b7294cbf3",
+  other6:   "6715ee6e-5d0f-429d-959d-3b1ea829ccf4",
+  other7:   "3f716ddf-bec1-43c1-8044-410571761697",
+  other8:   "ab443152-9534-4647-8f51-ab1ffd3867ca"
 };
 
 // UL ids in the HTML
@@ -35,7 +35,11 @@ const UL_IDS = {
   other1: "otherList1",
   other2: "otherList2",
   other3: "otherList3",
-  other4: "otherList4"
+  other4: "otherList4",
+  other5: "otherList5",
+  other6: "otherList6",
+  other7: "otherList7",
+  other8: "otherList8"
 };
 
 // Title span ids for "Other Important Lists"
@@ -43,7 +47,11 @@ const TITLE_SPAN_IDS = {
   other1: "otherTitle1",
   other2: "otherTitle2",
   other3: "otherTitle3",
-  other4: "otherTitle4"
+  other4: "otherTitle4",
+  other5: "otherTitle5",
+  other6: "otherTitle6",
+  other7: "otherTitle7",
+  other8: "otherTitle8"
 };
 
 // ---------- Utils ----------
@@ -96,25 +104,31 @@ function formatUltraShortDate(date) {
 }
 
 // ---------- Load ----------
-// ---------- Load ----------
 document.addEventListener("DOMContentLoaded", () => {
   loadAllData();
 
   // Toggle button logic
   const toggleBtn = document.getElementById("toggleViewBtn");
-  toggleBtn.addEventListener("click", () => {
-    document.body.classList.toggle("expanded");
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", () => {
+      document.body.classList.toggle("expanded");
 
-    if (document.body.classList.contains("expanded")) {
-      toggleBtn.textContent = "📋 Compact View";
-    } else {
-      toggleBtn.textContent = "🔍 Expand View";
-    }
-  });
+      if (document.body.classList.contains("expanded")) {
+        toggleBtn.textContent = "📋 Compact View";
+      } else {
+        toggleBtn.textContent = "🔍 Expand View";
+      }
+    });
+  }
 });
 
 async function loadAllData() {
-  const { data: lists } = await supabaseClient.from("lists").select("id,title");
+  const { data: lists, error } = await supabaseClient
+    .from("lists")
+    .select("id,title");
+
+  if (error) console.error(error);
+
   if (lists) {
     for (let l of lists) {
       const key = Object.keys(LIST_IDS).find(k => LIST_IDS[k] === l.id);
@@ -124,9 +138,9 @@ async function loadAllData() {
       }
     }
   }
+
   loadAllTasks();
 }
-
 
 async function loadAllTasks() {
   for (const [key, listId] of Object.entries(LIST_IDS)) {
@@ -134,13 +148,16 @@ async function loadAllTasks() {
       .from("tasks")
       .select("*")
       .eq("list_id", listId)
-      .order("due_date", { ascending: true })
+      .order("due_date", { ascending: true });
 
-
-    if (error) { console.error(error); continue; }
+    if (error) {
+      console.error(error);
+      continue;
+    }
 
     const ul = document.getElementById(UL_IDS[key]);
     if (!ul) continue;
+
     ul.innerHTML = "";
 
     tasks.forEach(task => {
@@ -160,12 +177,17 @@ async function loadAllTasks() {
 
       if (task.due_date) {
         const parsed = parseFlexibleDate(task.due_date);
+
         if (parsed) {
-          let formatted;
-          if (["discrete","calc","cyber","topics","other1","other2","other3","other4"].includes(key)) {
-            // small cards
-            formatted = formatShortDate(parsed);
-            dueCol.textContent = formatted;
+          // small cards keys
+          const smallKeys = [
+            "discrete", "calc", "cyber", "topics",
+            "other1", "other2", "other3", "other4",
+            "other5", "other6", "other7", "other8"
+          ];
+
+          if (smallKeys.includes(key)) {
+            dueCol.textContent = formatShortDate(parsed);
 
             // fallback to ultra short if overflow
             setTimeout(() => {
@@ -174,37 +196,64 @@ async function loadAllTasks() {
               }
             }, 0);
           } else {
-            // big cards
-            formatted = formatLongNoYearWithOrdinal(parsed);
-            dueCol.textContent = formatted;
+            dueCol.textContent = formatLongNoYearWithOrdinal(parsed);
           }
 
-                  // color logic (expanded system)
-            const today = new Date(); today.setHours(0,0,0,0);
-            const in3Days = new Date(today); in3Days.setDate(today.getDate() + 3);
-            const in1Week = new Date(today); in1Week.setDate(today.getDate() + 7);
-            const in2Weeks = new Date(today); in2Weeks.setDate(today.getDate() + 14);
+          // color logic (expanded system)
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const in3Days = new Date(today); in3Days.setDate(today.getDate() + 3);
+          const in1Week = new Date(today); in1Week.setDate(today.getDate() + 7);
+          const in2Weeks = new Date(today); in2Weeks.setDate(today.getDate() + 14);
 
-            if (parsed < today) {
-              dueCol.style.color = "red";        // overdue
-            } else if (+parsed === +today) {
-              dueCol.style.color = "red";        // due today
-            } else if (parsed <= in3Days) {
-              dueCol.style.color = "orange";     // within 3 days
-            } else if (parsed <= in1Week) {
-              dueCol.style.color = "gold";       // within 1 week
-            } else if (parsed <= in2Weeks) {
-              dueCol.style.color = "blue";       // within 2 weeks
-            } else {
-              dueCol.style.color = "grey";       // later
-            }
-
+          if (parsed < today) {
+            dueCol.style.color = "red";        // overdue
+          } else if (+parsed === +today) {
+            dueCol.style.color = "red";        // due today
+          } else if (parsed <= in3Days) {
+            dueCol.style.color = "orange";     // within 3 days
+          } else if (parsed <= in1Week) {
+            dueCol.style.color = "gold";       // within 1 week
+          } else if (parsed <= in2Weeks) {
+            dueCol.style.color = "blue";       // within 2 weeks
+          } else {
+            dueCol.style.color = "grey";       // later
+          }
+        }
       }
-    }
 
       li.appendChild(dueCol);
 
-      // Done button (red X)
+      // Edit button
+      const editBtn = document.createElement("button");
+      editBtn.textContent = "✎";
+      editBtn.classList.add("edit");
+      editBtn.onclick = async function () {
+        const newContent = prompt("Edit task:", task.content ?? "");
+        if (newContent === null) return; // user cancelled
+
+        const newDue = prompt("Edit due date (MM/DD or blank):", task.due_date ?? "");
+        if (newDue === null) return; // user cancelled
+
+        const { error } = await supabaseClient
+          .from("tasks")
+          .update({
+            content: newContent.trim(),
+            due_date: (newDue || "").trim() || null
+          })
+          .eq("id", task.id);
+
+        if (error) {
+          console.error("Error updating task:", error);
+          alert("Could not save task edits to Supabase!");
+          return;
+        }
+
+        loadAllTasks(); // refresh UI
+      };
+      li.appendChild(editBtn);
+
+      // Delete button (red X)
       const btn = document.createElement("button");
       btn.textContent = "✖";
       btn.classList.add("done");
@@ -251,14 +300,18 @@ async function addTask(listId, inputId, dateId, ulId, maxItems) {
 async function editTitle(spanId, listId) {
   const span = document.getElementById(spanId);
   if (!span) return;
+
   const current = span.textContent;
   const newTitle = prompt("Enter new title:", current);
+
   if (newTitle !== null && newTitle.trim() !== "") {
     span.textContent = newTitle.trim();
+
     const { error } = await supabaseClient
       .from("lists")
       .update({ title: newTitle.trim() })
       .eq("id", listId);
+
     if (error) {
       console.error("Error updating title:", error);
       alert("Could not save title to Supabase!");
