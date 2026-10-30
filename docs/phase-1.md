@@ -1,6 +1,6 @@
 # Phase 1 audit and validation
 
-Audit date: October 30, 2026. Source baseline: `b9a8d76`. Development branch: `codex/todo-phase-1`. No production task mutations, migrations, policies, or deployments were performed.
+Audit date: October 30, 2026. Source baseline: `b9a8d76`. The implementation is now on local `main` in the owner's chosen checkout at `C:\Users\speed_ayzysvt\Documents\GitHub\To-do-Website`, outside OneDrive. No production task mutations, migrations, policies, or deployments were performed.
 
 ## Existing data contract
 

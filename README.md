@@ -41,4 +41,4 @@ Tests use fixtures only and block external browser requests. See [Phase 1 audit 
 
 ## Release status
 
-Work stays on `codex/todo-phase-1`. Do not merge into `main`, change GitHub Pages settings, deploy, or apply database/RLS changes until the owner explicitly approves. The existing heartbeat file has not been activated or moved.
+The completed changes are on local `main` in the owner's chosen checkout, outside OneDrive. `main` tracks `origin/main` at `John-Vazquez/To-do-Website`; pushing it updates that GitHub branch and may publish the website. Do not push, change GitHub Pages settings, deploy, or apply database/RLS changes until the owner explicitly approves. The existing heartbeat file has not been activated or moved.
