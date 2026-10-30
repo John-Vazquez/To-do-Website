@@ -183,6 +183,18 @@ test('functional: browser preferences preserve pinned lists and store no task co
   assert.throws(() => preferences.archive(lists[0], true), /Pinned/);
   const broken = new Preferences({ getItem: () => '{broken', setItem: () => { throw new Error('disabled'); } }); assert.equal(broken.set('view', 'compact'), false);
 });
+
+test('server list metadata overrides stale browser order/archive until explicit import', () => {
+  const prefs = new Preferences({getItem:()=>JSON.stringify({order:[LISTS[3].id,LISTS[2].id],archived:[LISTS[2].id]})});
+  const rows=LISTS.slice(0,4).map((x,i)=>({id:x.id,title:x.title,is_archived:false,sort_order:x.fixed?null:(x.id===LISTS[2].id?0:99)}));
+  const server=arrangeLists(rows); server.forEach(x=>x.syncedMetadata=true);
+  const shown=prefs.arrange(server);
+  assert.equal(shown[2].id,LISTS[2].id);
+  assert.equal(shown[2].archived,false);
+  prefs.importBrowserListPreferences(shown);
+  assert.equal(shown[2].archived,true);
+  assert.equal(shown.find(x=>x.id===LISTS[2].id).sort_order,1);
+});
 test('functional: create list validates returned identity and read-only mode blocks creation', async () => {
   const { repo } = fixture(); repo.createList = async (id, title) => ({ id, title }); const store = new TaskStore(repo);
   const list = await store.createList('new-id', ' New list '); assert.equal(list.title, 'New list'); assert.deepEqual(store.tasks.get(list.id), []);

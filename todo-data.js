@@ -58,7 +58,7 @@ export function createSupabaseRepository(client, { readOnly = false } = {}) {
     }
   }
   return {
-    lists: () => pages(() => client.from('lists').select('id,title').order('id')),
+    lists: () => pages(() => client.from('lists').select('id,title,is_archived,sort_order').order('sort_order', { nullsFirst: false }).order('id')),
     tasks: listId => pages(() => client.from('tasks').select('*').eq('list_id', listId).order('id')),
     async create(listId, fields) {
       writable();
@@ -74,20 +74,38 @@ export function createSupabaseRepository(client, { readOnly = false } = {}) {
     },
     async rename(listId, title) {
       writable();
-      return checked(client.from('lists').update({ title }).eq('id', listId).select('id,title').single());
+      return checked(client.from('lists').update({ title }).eq('id', listId).select('id,title,is_archived,sort_order').single());
     },
     async createList(id, title) {
       writable();
-      return checked(client.from('lists').insert([{ id, title }]).select('id,title').single());
+      return checked(client.from('lists').insert([{ id, title }]).select('id,title,is_archived,sort_order').single());
+    },
+    async saveListMetadata(rows) {
+      writable();
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const saved=await checked(client.from('lists').update({ is_archived: !!row.archived, sort_order: row.fixed ? null : i }).eq('id', row.id).select('id').single());
+        if (saved.id !== row.id) throw new Error('Supabase returned a different list after saving metadata.');
+      }
+    },
+    async saveListOrder(rows) {
+      writable();
+      for (let i=0;i<rows.length;i++) { const saved=await checked(client.from('lists').update({ sort_order:i }).eq('id',rows[i].id).select('id').single()); if (saved.id!==rows[i].id) throw new Error('Supabase returned a different list after saving order.'); }
+    },
+    async saveListArchive(row, archived) {
+      writable();
+      const saved=await checked(client.from('lists').update({ is_archived:!!archived }).eq('id',row.id).select('id').single());
+      if (saved.id!==row.id) throw new Error('Supabase returned a different list after saving archive state.');
+      return saved;
     }
   };
 }
 
 export function arrangeLists(rows) {
   const existing = new Map(rows.map(row => [row.id, row]));
-  const known = LISTS.map(list => ({ ...list, title: list.fixed ? list.title : existing.get(list.id)?.title ?? list.title, available: existing.has(list.id) }));
+  const known = LISTS.map(list => ({ ...list, title: list.fixed ? list.title : existing.get(list.id)?.title ?? list.title, archived: !list.fixed && existing.get(list.id)?.is_archived === true, sort_order: existing.get(list.id)?.sort_order, syncedMetadata: Object.hasOwn(existing.get(list.id) || {}, 'is_archived'), available: existing.has(list.id) }));
   const ids = new Set(LISTS.map(list => list.id));
-  const extra = rows.filter(row => !ids.has(row.id)).sort((a, b) => String(a.id).localeCompare(String(b.id))).map(row => ({ ...row, key: row.id, available: true }));
+  const extra = rows.filter(row => !ids.has(row.id)).sort((a, b) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity) || String(a.id).localeCompare(String(b.id))).map(row => ({ ...row, key: row.id, archived: row.is_archived === true, syncedMetadata:Object.hasOwn(row,'is_archived'), available: true }));
   return [...known, ...extra];
 }
 
@@ -245,12 +263,22 @@ export class Preferences {
   arrange(lists) {
     const order = Array.isArray(this.value.order) ? this.value.order : [];
     const archived = Array.isArray(this.value.archived) ? this.value.archived : [];
-    lists.forEach(list => { list.archived = !list.fixed && archived.includes(list.id); });
+    lists.forEach(list => { if (!list.syncedMetadata) list.archived = !list.fixed && archived.includes(list.id); });
     return lists.map((list, index) => ({ list, index })).sort((a, b) => {
       if (a.list.fixed || b.list.fixed) return Number(Boolean(b.list.fixed)) - Number(Boolean(a.list.fixed)) || a.index - b.index;
-      const rank = item => order.includes(item.list.id) ? order.indexOf(item.list.id) : order.length + item.index;
-      return rank(a) - rank(b);
+      const rank = item => item.list.syncedMetadata ? (item.list.sort_order ?? Infinity) : order.includes(item.list.id) ? order.indexOf(item.list.id) : order.length + item.index;
+      return (rank(a) === rank(b) ? 0 : rank(a) < rank(b) ? -1 : 1) || a.index - b.index;
     }).map(item => item.list);
+  }
+  importBrowserListPreferences(lists) {
+    const order = Array.isArray(this.value.order) ? this.value.order : [];
+    const archived = new Set(Array.isArray(this.value.archived) ? this.value.archived : []);
+    const ordered = lists.filter(x => !x.fixed).sort((a,b) => {
+      const rank = id => order.includes(id) ? order.indexOf(id) : order.length + lists.indexOf(lists.find(x=>x.id===id));
+      return rank(a.id)-rank(b.id);
+    });
+    ordered.forEach((list, i) => { list.sort_order=i; list.archived=archived.has(list.id); });
+    return [...lists.filter(list => list.fixed), ...ordered];
   }
   archive(list, archived) {
     if (list.fixed) throw new Error('Pinned lists cannot be archived.');

@@ -6,8 +6,8 @@ const $ = selector => document.querySelector(selector);
 const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) || location.hostname.endsWith('.local');
 const params = new URLSearchParams(location.search);
 const demo = params.has('demo') || (local && params.get('source') !== 'live');
-// No live writes until schema, owner identity and access transition are verified.
-const readOnly = !demo;
+// Public hosted writes are explicitly enabled by the owner; local live previews stay read-only.
+const readOnly = !demo && (local || params.get('source') === 'live');
 let storage; try { storage = localStorage; } catch { /* Browser preferences optional. */ }
 const prefs = new Preferences(storage);
 let viewMode = prefs.value.view === 'expanded' ? 'expanded' : 'compact';
@@ -203,7 +203,8 @@ function renderCollection() {
     const groups = upcomingTasks(lists, store.tasks);
     for (const [group, rows] of Object.entries(groups)) { const section = el('section', 'upcoming-group'); section.append(el('h3', '', `${group} (${rows.length})`)); rows.forEach(({ list, task }) => section.append(resultButton(list, task))); if (!rows.length) section.append(el('p', 'muted', 'No tasks.')); body.append(section); }
   } else {
-    body.append(el('p', 'notice', 'Order and archive are saved in this browser only. Archiving hides a list from the overview; its tasks remain stored and searchable.'));
+    body.append(el('p', 'notice', demo || readOnly ? 'Order and archive are saved in this browser only. Archiving hides a list from the overview; its tasks remain stored and searchable.' : 'Order and archive sync across devices. Import this browser’s saved preferences explicitly with the button below.'));
+    if (!demo && !readOnly && (prefs.value.order || prefs.value.archived)) body.append(button('Import this browser’s order and archive settings', async () => { try { const imported=prefs.importBrowserListPreferences(lists); await store.repository.saveListMetadata(imported); lists = arrangeLists(await store.repository.lists()); render(); } catch (error) { await refresh(); notify(`Could not import preferences; server state reloaded: ${error.message}`); } }));
     const ordinary = lists.filter(list => !list.fixed);
     for (const list of lists) {
       const row = el('div', 'manage-row'); row.append(button(list.title, () => openList(list), 'manage-title'));
@@ -211,10 +212,10 @@ function renderCollection() {
       else {
         const index = ordinary.indexOf(list);
         for (const [offset, text, label] of [[-1, '↑', 'Move up'], [1, '↓', 'Move down']]) {
-          const move = button(text, () => { const ids = ordinary.map(list => list.id), target = index + offset; [ids[index], ids[target]] = [ids[target], ids[index]]; remember('order', ids); render(); }, '', `${label} ${list.title}`);
+          const move = button(text, async () => { const ids = ordinary.map(list => list.id), target = index + offset; [ids[index], ids[target]] = [ids[target], ids[index]]; remember('order', ids); if (!demo && !readOnly) { try { const reordered = ids.map(id => listById(id)); await store.repository.saveListOrder(reordered); lists = arrangeLists(await store.repository.lists()); } catch (error) { await refresh(); notify(`Could not save order; server order reloaded: ${error.message}`); } } render(); }, '', `${label} ${list.title}`);
           move.disabled = index + offset < 0 || index + offset >= ordinary.length; row.append(move);
         }
-        row.append(button(list.archived ? 'Restore' : 'Archive', () => { if (!prefs.archive(list, !list.archived)) notify('Archive preference could not be saved; it lasts for this tab.'); render(); }, '', `${list.archived ? 'Restore' : 'Archive'} ${list.title}`));
+        row.append(button(list.archived ? 'Restore' : 'Archive', async () => { const nextArchived=!list.archived; if (!demo && !readOnly) { try { await store.repository.saveListArchive(list,nextArchived); list.archived=nextArchived; lists=arrangeLists(await store.repository.lists()); } catch (error) { await refresh(); notify(`Could not save archive state; server state reloaded: ${error.message}`); } } else { if (!prefs.archive(list,nextArchived)) notify('Archive preference could not be saved; it lasts for this tab.'); } render(); }, '', `${list.archived ? 'Restore' : 'Archive'} ${list.title}`));
       }
       body.append(row);
     }
@@ -227,18 +228,24 @@ async function refresh() {
     if (!store) {
       let repository;
       if (demo) repository = createDemoRepository();
-      else { const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/+esm'); repository = createSupabaseRepository(createClient(SUPABASE_URL, SUPABASE_KEY), { readOnly: true }); }
+      else {
+        const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/+esm');
+        const client = createClient(SUPABASE_URL, SUPABASE_KEY);
+        repository = createSupabaseRepository(client, { readOnly });
+      }
       const lock = navigator.locks ? (id, action) => navigator.locks.request(`todo-list:${id}`, action) : undefined;
       store = new TaskStore(repository, { lock });
     }
-    const next = arrangeLists(await store.repository.lists());
+    const rows = await store.repository.lists();
+    const next = arrangeLists(rows);
+    next.forEach(list => { if (list.available) list.syncedMetadata = !demo && rows.some(row => Object.hasOwn(row, 'is_archived')); });
     lists = next.map(list => Object.assign(listById(list.id) || {}, list));
     render();
     await Promise.all(lists.filter(list => list.available).map(async list => {
       try { await store.load(list.id); loaded.add(list.id); errors.delete(list.id); }
       catch (failure) { errors.set(list.id, failure); }
     }));
-    $('#connection-status').textContent = errors.size ? 'Some lists failed to load. Refresh to retry.' : demo ? 'Demo ready · in-memory sample data' : 'Live data loaded · read only';
+    $('#connection-status').textContent = errors.size ? 'Some lists failed to load. Refresh to retry.' : demo ? 'Demo ready · in-memory sample data' : readOnly ? 'Live preview · read only' : 'Live data · synced';
     if (errors.size) errorAt($('#global-error'), 'Some lists could not load. Refresh data from the menu to retry.');
   } catch (failure) { errorAt($('#global-error'), `Could not load lists: ${failure.message}`); $('#connection-status').textContent = 'Connection failed'; }
   finally { refreshing = false; $('#refresh').disabled = false; $('#upcoming').disabled = !loaded.size; render(); }
@@ -264,6 +271,6 @@ for (const mode of ['compact', 'expanded']) $('#' + mode).onclick = () => { view
 $('#dismiss-notification').onclick = () => { $('#notification').hidden = true; undoTaskId = null; };
 $('#undo').onclick = async () => { const task = currentTask(undoTaskId); if (!task) { notify('Task no longer available. Refresh data.'); return; } await run(listById(task.list_id), async () => { await store.setDone(task, false, listById(task.list_id)); notify('Completion undone.'); }); };
 window.addEventListener('beforeunload', event => { if ([...drafts.values()].some(Boolean) || store?.pending.size || dialogState?.busy || (dialogState && snapshot() !== dialogState.initial)) { event.preventDefault(); event.returnValue = ''; } });
-$('#mode-badge').textContent = demo ? 'DEMO' : 'READ ONLY';
-$('#mode-notice').textContent = demo ? 'Sample data · resets on reload' : 'Live writes blocked pending schema and owner-access verification';
+$('#mode-badge').textContent = demo ? 'DEMO' : 'LIVE';
+$('#mode-notice').textContent = demo ? 'Sample data · resets on reload' : readOnly ? 'Read-only local live preview' : 'Public live lists';
 refresh();
