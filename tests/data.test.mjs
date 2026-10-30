@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { LISTS } from '../todo-config.js';
-import { TaskStore, arrangeLists, createSupabaseRepository, dateInputValue, parseDate, sortTasks, validateTask } from '../todo-data.js';
+import { TaskStore, Preferences, activeTasks, arrangeLists, createSupabaseRepository, dateInputValue, parseDate, searchTasks, sortTasks, upcomingTasks, validateTask } from '../todo-data.js';
 
 const must = LISTS[1];
 const task = (id, list_id = must.id, rest = {}) => ({ id, list_id, content: id, due_date: null, urgency: null, ...rest });
@@ -130,4 +130,61 @@ test('PWA manifest and PNG icons are valid at their declared dimensions', async 
     const png = await readFile(new URL('../' + icon.src, import.meta.url));
     assert.equal(png.subarray(1, 4).toString(), 'PNG'); assert.equal(`${png.readUInt32BE(16)}x${png.readUInt32BE(20)}`, icon.sizes);
   }
+});
+
+test('functional: moves preserve identity, metadata and source state on failure', async () => {
+  const source = { ...LISTS[2], available: true }, destination = { ...LISTS[0], available: true };
+  const original = task('moving', source.id, { content: 'Original text', due_date: '11/2', urgency: 3, is_done: false, created_at: 'original timestamp', custom: { preserve: true } });
+  const { repo } = fixture([original]); const store = new TaskStore(repo); await store.load(source.id); await store.load(destination.id);
+  const moved = await store.changeTask(original, {}, destination);
+  assert.deepEqual(moved, { ...original, list_id: destination.id }); assert.equal(store.tasks.get(source.id).length, 0);
+  repo.update = async () => { throw new Error('move denied'); };
+  await assert.rejects(store.changeTask(moved, {}, source), /move denied/); assert.deepEqual(store.tasks.get(destination.id), [moved]);
+  await assert.rejects(store.update(moved, { is_done: false }), /changeTask/);
+});
+test('functional: completion, reopen, moves and undo obey active-only capacity', async () => {
+  const list = { ...must, available: true }, other = { ...LISTS[2], available: true };
+  const done = task('done', must.id, { is_done: true }), { repo } = fixture([task('one'), task('two'), done, task('outside', other.id)]);
+  const store = new TaskStore(repo); await store.load(list.id); await store.load(other.id);
+  await store.create(list, { content: 'third' }); assert.equal(activeTasks(store.tasks.get(list.id)).length, 3);
+  await assert.rejects(store.setDone(done, false, list), /3 active tasks/);
+  const outside = store.tasks.get(other.id)[0]; await assert.rejects(store.changeTask(outside, {}, list), /3 active tasks/);
+  const one = store.tasks.get(list.id).find(row => row.id === 'one'); const completed = await store.setDone(one, true, list);
+  const moved = await store.changeTask(outside, {}, list); assert.equal(moved.id, 'outside');
+  await assert.rejects(store.setDone(completed, false, list), /3 active tasks/);
+  assert.equal(store.tasks.get(list.id).filter(row => row.is_done === true).length, 2);
+});
+test('functional: concurrent moves reserve both lists without deadlocks or duplicates', async () => {
+  const source = { ...LISTS[2], available: true }, target = { ...LISTS[3], available: true }, { repo } = fixture([task('one', source.id)]);
+  const update = repo.update; repo.update = async (...args) => { await new Promise(resolve => setTimeout(resolve, 20)); return update(...args); };
+  const store = new TaskStore(repo); await store.load(source.id); await store.load(target.id); const original = store.tasks.get(source.id)[0];
+  const move = store.changeTask(original, {}, target); await assert.rejects(store.changeTask(original, {}, target), /still saving/); await move;
+  assert.equal(store.tasks.get(target.id).length, 1); assert.equal(store.pending.size, 0);
+});
+test('functional: partial bulk failures retain only unsaved lines', async () => {
+  const { repo } = fixture([task('one'), task('two')]); const store = new TaskStore(repo); await store.load(must.id);
+  await assert.rejects(store.bulkCreate(must, 'Third\nFourth\nFifth'), error => error.savedCount === 1 && error.remaining === 'Fourth\nFifth');
+  assert.equal(store.tasks.get(must.id).length, 3);
+});
+test('functional: search and Upcoming exclude completed by default and sort date groups', () => {
+  const list = { ...LISTS[2], title: 'Work' }, archived = { ...LISTS[3], title: 'Hidden', archived: true };
+  const rows = [task('past', list.id, { content: 'Appointment', due_date: '2026-10-29' }), task('today', list.id, { due_date: '2026-10-30' }), task('week', list.id, { due_date: '2026-11-06' }), task('later', list.id, { due_date: '2026-11-07' }), task('done', list.id, { is_done: true, content: 'Appointment done', due_date: '2026-10-30' })];
+  const tasks = new Map([[list.id, rows], [archived.id, [task('hidden', archived.id, { due_date: '2026-10-30' })]]]);
+  assert.equal(searchTasks([list], tasks, 'appointment').length, 1); assert.equal(searchTasks([list], tasks, 'appointment', true).length, 2);
+  assert.equal(searchTasks([list], tasks, 'work').length, 5);
+  const groups = upcomingTasks([list, archived], tasks, new Date(2026, 9, 30));
+  assert.deepEqual(Object.values(groups).map(rows => rows.map(row => row.task.id)), [['past'], ['today'], ['week'], ['later']]);
+});
+test('functional: browser preferences preserve pinned lists and store no task content', () => {
+  const saved = new Map(), storage = { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) };
+  const preferences = new Preferences(storage), lists = LISTS.map(list => ({ ...list }));
+  preferences.set('view', 'expanded'); preferences.set('order', [lists[3].id, lists[2].id]); preferences.archive(lists[2], true);
+  const next = new Preferences(storage).arrange(lists); assert.equal(next[0].id, LISTS[0].id); assert.equal(next[1].id, LISTS[1].id); assert.equal(next[2].id, LISTS[3].id); assert.equal(next[3].archived, true);
+  assert.throws(() => preferences.archive(lists[0], true), /Pinned/);
+  const broken = new Preferences({ getItem: () => '{broken', setItem: () => { throw new Error('disabled'); } }); assert.equal(broken.set('view', 'compact'), false);
+});
+test('functional: create list validates returned identity and read-only mode blocks creation', async () => {
+  const { repo } = fixture(); repo.createList = async (id, title) => ({ id, title }); const store = new TaskStore(repo);
+  const list = await store.createList('new-id', ' New list '); assert.equal(list.title, 'New list'); assert.deepEqual(store.tasks.get(list.id), []);
+  const client = fakeClient(() => { throw new Error('must not call'); }); await assert.rejects(createSupabaseRepository(client, { readOnly: true }).createList('new-id', 'Title'), /read-only/);
 });

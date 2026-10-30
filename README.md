@@ -1,10 +1,8 @@
-# To do — Phase 1
+# To-Do
 
-A static, all-lists personal task app. Open `todo.html` through an HTTP server; no application build is required. `personal.html` and the rest of the personal website keep their existing routes.
+Static task application with a compact all-lists overview, full list editor, global search and task management. Development branch: `codex/todo-functional-redesign`.
 
-## Local preview
-
-Requires Node.js 20 or newer:
+## Preview safely
 
 ```powershell
 cd C:\Users\speed_ayzysvt\Documents\GitHub\To-do-Website
@@ -12,24 +10,23 @@ npm ci
 npm run dev
 ```
 
-Open <http://127.0.0.1:4173/todo.html>. Localhost defaults to **an in-memory demo with invented tasks**. Changes reset on page reload. No Supabase requests, task storage, or external script downloads happen in demo mode. `?demo` explicitly selects this mode on any host.
+Open <http://127.0.0.1:4173/todo.html?demo>. All task and list mutations operate on invented, in-memory data. Reload resets sample records; preferences retain Compact/Expanded, last destination, list order and archived IDs. No task content is saved to browser storage. No Supabase or external script requests occur in demo mode.
 
-For a **read-only** view of your actual lists, open <http://127.0.0.1:4173/todo.html?source=live>. This loads the existing public Supabase client configuration; the repository adapter rejects create, update, delete, and rename calls in this mode. Production write tests have deliberately not been run. Do not expose the development server to your network or use another hostname to bypass its local safety mode.
+<http://127.0.0.1:4173/todo.html?source=live> loads actual lists **read-only**. Live writes remain blocked in both UI and repository until the actual schema, owner authentication and authorization are verified. Pushing this branch does not apply SQL. Do not merge it into the website's production branch while these release blockers remain.
 
-## What changed
+## Implemented
 
-- Doing Right Now and Must Do Today are permanent full-width cards; Must Do Today retains its three-task limit. All additional lists stay on the same page in two desktop columns or one mobile column.
-- All 14 original IDs remain in `todo-config.js`. The eight previously visible custom lists retain their order. Four academic lists that the original JavaScript loaded without matching HTML cards now appear after them. Additional database lists append in stable ID order because no persisted list-order column has been verified.
-- Task CRUD and list renaming share a Supabase repository and DOM-independent `TaskStore` in `todo-data.js`. Paginated reads avoid an accidental 1,000-row limit. Default ordering remains urgency descending, then parsed due date ascending; a date-first option is available per list.
-- Accessible add forms and modal editing replace `prompt()`. Failed writes keep drafts and original rows/titles. A successful write must return its matching row; a denied or zero-row mutation cannot silently look saved. Pending operations disable controls and repeated submissions are rejected before awaiting network operations.
-- The three-task limit is checked against fresh server rows under a same-origin Web Lock where supported. Pending submissions are reserved immediately. **This cannot guarantee the limit across separate devices, origins, unsupported browsers, or direct API clients.** A transactional database operation is required for that guarantee; none was added without approval.
-- Ambiguous insert failures require a successful list reload and a check for the previous task before retrying. No automatic INSERT retries. This reduces duplicates when the server saved a task but its response was lost.
-- Editing only sends changed fields. Existing free-form due dates, `is_done`, timestamps, and other returned fields are not rewritten during a content-only edit. Native date controls are used for new dates. Existing tasks are never transformed on load.
-- Completing a task retains the original app's deletion behavior. Both completion and deletion explicitly confirm permanent removal. Completion history and undo do not exist in Phase 1.
-- Unsaved modal edits require explicit discard; background refresh preserves add-form drafts. Page navigation requests the browser's unsaved-changes warning. Mobile operating systems can terminate tabs without this event; private drafts are intentionally not persisted in browser storage.
-- Static manifest, SVG favicon, 192/512 PNG icons and 180px Apple icon support Add to Home Screen. No service worker or offline task cache is installed. The live app requires internet. Home Screen installation on an actual iPhone remains a manual check after an approved HTTPS release.
+- Side-by-side pinned lists on desktop; stacked on mobile. Three ordinary columns at 1440px+, two at tablet/smaller desktop widths, one on mobile.
+- Compact mode shows five tasks per ordinary list and an exact `+N more` link. Expanded mode shows all active tasks on the same page. Empty lists take one heading row.
+- Quick Add remembers the destination. Pinned cards also support inline entry and direct completion.
+- Full list editor: all active tasks, individual task details, independently editable deadline/urgency, task moves, sorting, completed visibility, rename and bulk add.
+- Completion updates `is_done`; it does not delete. Reopen and recent-completion Undo preserve task identity and metadata. Permanent deletion is separate and confirmed.
+- Global search includes list names and task text; completed tasks require an explicit checkbox. Upcoming groups dated tasks across unarchived lists.
+- List creation uses the existing ID/title model. Order, archive and restore currently work **in this browser only**, labelled in Settings and Manage lists. Archiving hides the card without changing/deleting tasks. Pinned lists cannot be archived.
+- Shared `todo-data.js` repository/TaskStore retain verified writes, pagination, pending locks, failure handling and ambiguous-insert reconciliation. Moves/reopens also recheck Must Do Today's active capacity. Browser locks do not guarantee cross-device capacity; prepared SQL provides a server enforcement candidate.
+- PWA metadata/icons preserved. No service worker or private task cache.
 
-## Tests
+## Validation
 
 ```powershell
 npm ci
@@ -37,8 +34,6 @@ npx playwright install chromium webkit
 npm test
 ```
 
-Tests use fixtures only and block external browser requests. See [Phase 1 audit and validation](docs/phase-1.md) for results, security findings, known limits, heartbeat correction, and future API design. `node scripts/audit-supabase.mjs` is an optional **read-only live** audit: it prints list IDs/titles, counts, and redacted task column types. Do not commit its output or real personal task content.
+The suite includes prior data regressions, new functional tests, isolated PostgreSQL SQL/RLS checks using PGlite, and Playwright desktop/tablet/iPhone tests. PGlite is a development dependency only; it is not loaded by the app.
 
-## Release status
-
-The completed changes are on local `main` in the owner's chosen checkout, outside OneDrive. `main` tracks `origin/main` at `John-Vazquez/To-do-Website`; pushing it updates that GitHub branch and may publish the website. Do not push, change GitHub Pages settings, deploy, or apply database/RLS changes until the owner explicitly approves. The existing heartbeat file has not been activated or moved.
+See [functional redesign report](docs/functional-redesign.md) for results, screenshots, schema-dependent work and release prerequisites. [Phase 1 audit](docs/phase-1.md) is historical evidence; its original UI and deletion-based completion have been superseded.

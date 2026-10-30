@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f6f7f9">
-  <meta name="description" content="A little focus. All your lists, together in one place.">
+  <meta name="theme-color" content="#f4f5f7">
+  <meta name="description" content="Lists, tasks, deadlines and priorities.">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="To do">
-  <title>To do — a little focus</title>
+  <meta name="apple-mobile-web-app-title" content="To-Do">
+  <title>To-Do</title>
   <link rel="manifest" href="todo.webmanifest">
   <link rel="icon" href="icons/todo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -17,30 +17,34 @@
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to lists</a>
-  <header class="app-header">
-    <div class="brand"><span class="brand-mark" aria-hidden="true">✓</span><h1>To do<span class="brand-caption">a little focus</span></h1></div>
-    <a class="back-link" href="personal.html">Personal home <span aria-hidden="true">↗</span></a>
+  <header class="toolbar">
+    <h1>To-Do</h1><span id="mode-badge" class="mode-badge"></span>
+    <label class="search-field"><span class="sr-only">Search all lists and tasks</span><input id="search" type="search" placeholder="Search tasks and lists…" autocomplete="off"></label>
+    <button id="quick-add" class="primary" type="button">+ Add Task</button>
+    <button id="add-list" type="button">+ Add List</button>
+    <button id="upcoming" type="button">Upcoming</button>
+    <details class="menu"><summary aria-label="Settings and actions">•••</summary><div class="menu-items"><button id="manage-lists" type="button">Manage lists</button><button id="refresh" type="button">Refresh data</button><a href="personal.html">Personal home</a><p id="connection-status" role="status">Loading…</p><p>List order and archive preferences: this browser only.</p></div></details>
   </header>
-  <main id="main" class="workspace">
-    <div class="page-intro"><div><p class="eyebrow">ONE THING AT A TIME</p><p class="intro-copy">Make room for what matters.</p></div><p id="today-label" class="today-label"></p></div>
-    <div id="mode-notice" class="mode-notice" hidden></div>
-    <div class="connection-bar"><p id="connection-status" role="status">Connecting to your lists…</p><button id="reload-all" class="quiet" type="button">Refresh lists</button></div>
+  <main id="main">
+    <div class="view-bar"><div class="view-switch" role="group" aria-label="Overview density"><button id="compact" type="button" aria-pressed="true">Compact</button><button id="expanded" type="button" aria-pressed="false">Expanded</button></div><span id="overview-count"></span><span id="mode-notice"></span></div>
     <p id="global-error" class="error" role="alert" hidden></p>
-    <div id="focus-lists" class="focus-lists" aria-label="Focus lists"></div>
-    <div class="section-heading"><div><p class="eyebrow">THE REST, ALL HERE</p><h2>Other Important Lists</h2></div><span class="section-note">A place for everything.</span></div>
-    <div id="other-lists" class="list-grid"></div>
-    <noscript><p class="error">JavaScript is required to load and save your lists.</p></noscript>
-    <footer class="app-footer">A little progress counts.<span>All your lists. One place.</span></footer>
+    <section id="search-section" aria-labelledby="search-heading" hidden><div class="section-bar"><h2 id="search-heading">Search results</h2><label><input id="search-completed" type="checkbox"> Include completed</label></div><div id="search-results"></div></section>
+    <section id="focus-lists" class="pinned-grid" aria-label="Pinned lists"></section>
+    <div class="section-bar"><h2>Other lists</h2><span id="other-count"></span></div>
+    <section id="other-lists" class="list-grid" aria-label="Other lists"></section>
+    <noscript><p class="error">Enable JavaScript to manage tasks.</p></noscript>
   </main>
-  <dialog id="editor" aria-labelledby="editor-heading">
-    <form id="editor-form">
-      <div class="dialog-heading"><h2 id="editor-heading">Edit task</h2><button id="editor-close" type="button" class="icon-button" aria-label="Close editor">×</button></div>
-      <p id="editor-description" class="muted"></p>
-      <div id="editor-fields"></div>
-      <p id="editor-error" class="error" role="alert" hidden></p>
-      <div id="discard-panel" class="discard-panel" hidden><p>You have unsaved changes. Discard them?</p><button id="keep-editing" type="button" class="quiet">Keep editing</button><button id="discard-changes" type="button" class="danger">Discard changes</button></div>
-      <div class="dialog-actions"><button id="editor-cancel" type="button" class="quiet">Cancel</button><button id="editor-save" type="submit" class="primary">Save changes</button></div>
-    </form>
+  <div id="notification" class="notification" role="status" hidden><span id="notification-text"></span><button id="undo" type="button" hidden>Undo</button><button id="dismiss-notification" type="button" aria-label="Dismiss notification">×</button></div>
+  <dialog id="list-panel" class="list-panel" aria-labelledby="list-panel-title">
+    <div class="panel-heading"><h2 id="list-panel-title"></h2><span id="list-panel-count" class="count"></span><button id="rename-list" type="button">Rename</button><button id="close-list" type="button" aria-label="Close list">×</button></div>
+    <div class="panel-tools"><button id="list-add" class="primary" type="button">+ Add task</button><button id="list-bulk" type="button">Bulk add</button><label class="sort-label">Sort <select id="list-sort"><option value="priority">Urgency first</option><option value="date">Deadline first</option></select></label><label><input id="show-completed" type="checkbox"> Show completed</label></div>
+    <p id="list-panel-error" class="error" role="alert" hidden></p>
+    <div id="list-panel-body" class="panel-body"></div>
+    <div class="panel-footer"><span>Task changes are saved individually.</span><button id="close-list-footer" type="button">Close</button></div>
+  </dialog>
+  <dialog id="collection" class="list-panel" aria-labelledby="collection-title"><div class="panel-heading"><h2 id="collection-title"></h2><button id="close-collection" type="button" aria-label="Close panel">×</button></div><div id="collection-body" class="panel-body"></div></dialog>
+  <dialog id="editor" class="task-editor" aria-labelledby="editor-heading">
+    <form id="editor-form"><div class="panel-heading"><h2 id="editor-heading"></h2><button id="editor-close" type="button" aria-label="Close editor">×</button></div><p id="editor-description" class="muted"></p><div id="editor-fields"></div><p id="editor-error" class="error" role="alert" hidden></p><div id="discard-panel" class="confirmation" hidden><p>Discard unsaved changes?</p><button id="keep-editing" type="button">Keep editing</button><button id="discard-changes" class="danger" type="button">Discard changes</button></div><div id="delete-panel" class="confirmation" hidden><p>Permanently delete this task? This cannot be undone.</p><button id="keep-task" type="button">Keep task</button><button id="confirm-delete" class="danger" type="button">Delete permanently</button></div><div class="editor-actions"><button id="delete-task" class="danger-outline" type="button" hidden>Delete task…</button><span></span><button id="editor-cancel" type="button">Cancel</button><button id="editor-save" class="primary" type="submit">Save</button></div></form>
   </dialog>
 </body>
 </html>

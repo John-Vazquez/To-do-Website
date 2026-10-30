@@ -1,8 +1,8 @@
 {
   "id": "./todo.html",
-  "name": "To do — a little focus",
-  "short_name": "To do",
-  "description": "All your lists, together in one place.",
+  "name": "To-Do",
+  "short_name": "To-Do",
+  "description": "Lists, tasks, deadlines and priorities.",
   "start_url": "./todo.html",
   "scope": "./",
   "display": "standalone",

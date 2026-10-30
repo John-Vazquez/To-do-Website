@@ -1,5 +1,7 @@
 # Phase 1 audit and validation
 
+Historical report: UI and deletion-based completion below have been superseded by the [functional redesign](functional-redesign.md). The anonymous-read finding and missing management access remain relevant.
+
 Audit date: October 30, 2026. Source baseline: `b9a8d76`. The implementation is now on local `main` in the owner's chosen checkout at `C:\Users\speed_ayzysvt\Documents\GitHub\To-do-Website`, outside OneDrive. No production task mutations, migrations, policies, or deployments were performed.
 
 ## Existing data contract

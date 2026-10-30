@@ -75,6 +75,10 @@ export function createSupabaseRepository(client, { readOnly = false } = {}) {
     async rename(listId, title) {
       writable();
       return checked(client.from('lists').update({ title }).eq('id', listId).select('id,title').single());
+    },
+    async createList(id, title) {
+      writable();
+      return checked(client.from('lists').insert([{ id, title }]).select('id,title').single());
     }
   };
 }
@@ -102,11 +106,14 @@ export class TaskStore {
     this.uncertainCreates.delete(listId);
     return tasks;
   }
-  async exclusive(listId, action) {
-    if (this.pending.has(listId)) throw new Error('A change to this list is still saving. Please wait.');
-    this.pending.add(listId); // Reserve before the first asynchronous operation.
-    try { return await this.lock(listId, action); }
-    finally { this.pending.delete(listId); }
+  async exclusive(listId, action) { return this.exclusiveMany([listId], action); }
+  async exclusiveMany(listIds, action) {
+    const ids = [...new Set(listIds)].sort();
+    if (ids.some(id => this.pending.has(id))) throw new Error('A change to this list is still saving. Please wait.');
+    ids.forEach(id => this.pending.add(id));
+    const acquire = index => index === ids.length ? action() : this.lock(ids[index], () => acquire(index + 1));
+    try { return await acquire(0); }
+    finally { ids.forEach(id => this.pending.delete(id)); }
   }
   async create(list, fields) {
     const valid = validateTask(fields);
@@ -117,7 +124,7 @@ export class TaskStore {
         // Refresh under the browser's cross-tab lock before counting.
         const latest = await this.repository.tasks(list.id);
         this.tasks.set(list.id, latest);
-        if (latest.length >= list.limit) throw new Error('Must Do Today is limited to 3 tasks. Complete or remove one first.');
+        if (activeTasks(latest).length >= list.limit) throw new Error('Must Do Today is limited to 3 active tasks. Complete or move one first.');
       }
       let task;
       try {
@@ -134,6 +141,7 @@ export class TaskStore {
     });
   }
   async update(task, fields) {
+    if ('list_id' in fields || 'is_done' in fields) throw new Error('Use changeTask for moves or completion so capacity is checked.');
     return this.exclusive(task.list_id, async () => {
       const saved = await this.repository.update(task, fields);
       if (saved?.id !== task.id || saved.list_id !== task.list_id) throw new Error('No matching task was saved. Reload and try again.');
@@ -155,5 +163,99 @@ export class TaskStore {
       if (saved?.id !== list.id || saved.title !== title.trim()) throw new Error('The new title could not be confirmed.');
       list.title = saved.title;
     });
+  }
+  async changeTask(task, fields, destination) {
+    if (!destination?.available || destination.archived) throw new Error('Choose an available, unarchived destination list.');
+    if (!this.tasks.has(destination.id)) throw new Error('Load the destination list before moving a task.');
+    return this.exclusiveMany([task.list_id, destination.id], async () => {
+      const becomingActive = (fields.is_done ?? task.is_done) !== true;
+      if (destination.limit && becomingActive && (task.list_id !== destination.id || task.is_done === true)) {
+        const latest = await this.repository.tasks(destination.id);
+        this.tasks.set(destination.id, latest);
+        if (activeTasks(latest).filter(row => row.id !== task.id).length >= destination.limit) throw new Error('Must Do Today is limited to 3 active tasks. Complete or move one first.');
+      }
+      const patch = { ...fields, ...(destination.id !== task.list_id ? { list_id: destination.id } : {}) };
+      const saved = await this.repository.update(task, patch);
+      if (saved?.id !== task.id || saved.list_id !== destination.id) throw new Error('No matching task was saved. Reload and try again.');
+      this.tasks.set(task.list_id, this.tasks.get(task.list_id).filter(row => row.id !== task.id));
+      this.tasks.set(destination.id, [...this.tasks.get(destination.id), saved]);
+      return saved;
+    });
+  }
+  async setDone(task, done, list) { return this.changeTask(task, { is_done: Boolean(done) }, list); }
+  async bulkCreate(list, text) {
+    const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    if (!lines.length) throw new Error('Enter one task per line.');
+    const completed = [];
+    // Sequential creates honor capacity and pending reservations. Successful lines
+    // are reported so a partial failure cannot reinsert them on retry.
+    for (let index = 0; index < lines.length; index++) {
+      try { completed.push(await this.create(list, { content: lines[index] })); }
+      catch (error) { error.remaining = lines.slice(index).join('\n'); error.savedCount = completed.length; throw error; }
+    }
+    return completed;
+  }
+  async createList(id, title) {
+    if (!title.trim()) throw new Error('Enter a list title.');
+    return this.exclusive('__lists__', async () => {
+      const saved = await this.repository.createList(id, title.trim());
+      if (saved?.id !== id || saved.title !== title.trim()) throw new Error('List creation could not be confirmed. Refresh before retrying.');
+      this.tasks.set(id, []);
+      return { ...saved, key: id, available: true };
+    });
+  }
+}
+
+export const activeTasks = tasks => tasks.filter(task => task.is_done !== true);
+export function upcomingTasks(lists, tasks, now = new Date()) {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const week = new Date(today); week.setDate(week.getDate() + 7);
+  const groups = { Overdue: [], Today: [], 'Next 7 days': [], Later: [] };
+  for (const list of lists.filter(list => !list.archived)) {
+    for (const task of sortTasks(activeTasks(tasks.get(list.id) || []), 'date')) {
+      const date = parseDate(task.due_date); if (!date) continue;
+      const group = date < today ? 'Overdue' : +date === +today ? 'Today' : date <= week ? 'Next 7 days' : 'Later';
+      groups[group].push({ list, task });
+    }
+  }
+  for (const rows of Object.values(groups)) rows.sort((a, b) => +parseDate(a.task.due_date) - +parseDate(b.task.due_date));
+  return groups;
+}
+export function searchTasks(lists, tasks, query, includeDone = false) {
+  const term = query.trim().toLocaleLowerCase();
+  if (!term) return [];
+  return lists.flatMap(list => {
+    const listMatch = list.title.toLocaleLowerCase().includes(term);
+    const matches = (tasks.get(list.id) || []).filter(task => (includeDone || task.is_done !== true) && (listMatch || String(task.content).toLocaleLowerCase().includes(term)));
+    return [...(listMatch ? [{ list, task: null }] : []), ...matches.map(task => ({ list, task }))];
+  });
+}
+
+// Preferences contain IDs and UI settings only, never private task text.
+export class Preferences {
+  constructor(storage) {
+    this.storage = storage;
+    try { const value = JSON.parse(storage?.getItem('todo.preferences.v2') || '{}'); this.value = value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }
+    catch { this.value = {}; }
+  }
+  set(key, value) {
+    this.value[key] = value;
+    try { this.storage?.setItem('todo.preferences.v2', JSON.stringify(this.value)); return true; } catch { return false; }
+  }
+  arrange(lists) {
+    const order = Array.isArray(this.value.order) ? this.value.order : [];
+    const archived = Array.isArray(this.value.archived) ? this.value.archived : [];
+    lists.forEach(list => { list.archived = !list.fixed && archived.includes(list.id); });
+    return lists.map((list, index) => ({ list, index })).sort((a, b) => {
+      if (a.list.fixed || b.list.fixed) return Number(Boolean(b.list.fixed)) - Number(Boolean(a.list.fixed)) || a.index - b.index;
+      const rank = item => order.includes(item.list.id) ? order.indexOf(item.list.id) : order.length + item.index;
+      return rank(a) - rank(b);
+    }).map(item => item.list);
+  }
+  archive(list, archived) {
+    if (list.fixed) throw new Error('Pinned lists cannot be archived.');
+    const ids = new Set(Array.isArray(this.value.archived) ? this.value.archived : []);
+    archived ? ids.add(list.id) : ids.delete(list.id);
+    const persisted = this.set('archived', [...ids]); list.archived = archived; return persisted;
   }
 }
