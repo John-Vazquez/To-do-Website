@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
   let fixture = source;
   for (const method of ['lists', 'tasks', 'create', 'update', 'remove', 'rename', 'createList']) fixture = fixture.replace(new RegExp(`async ${method}\\(([^)]*)\\) \\{`), `async ${method}($1) { if (window.__fail === '${method}') throw new Error('Fixture ${method} denied');`);
-  await page.route('**/todo-demo.js', route => route.fulfill({ contentType: 'text/javascript', body: fixture }));
+  await page.route(/\/todo-demo\.js(?:\?.*)?$/, route => route.fulfill({ contentType: 'text/javascript', body: fixture }));
   await page.goto('/todo.html?demo'); await expect(page.locator('#connection-status')).toContainText('Demo ready');
 });
 async function quickAdd(page, title, index = 2) {

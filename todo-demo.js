@@ -1,4 +1,4 @@
-import { LISTS } from './todo-config.js';
+import { LISTS } from './todo-config.js?v=20261030-2';
 
 // Entirely invented data. Kept in memory only; reload resets the demo.
 export function createDemoRepository() {

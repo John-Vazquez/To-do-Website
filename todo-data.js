@@ -1,4 +1,4 @@
-import { LISTS } from './todo-config.js';
+import { LISTS } from './todo-config.js?v=20261030-2';
 
 export function parseDate(value, year = new Date().getFullYear()) {
   if (!value) return null;

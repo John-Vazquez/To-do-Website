@@ -1,6 +1,6 @@
-import { LISTS, SUPABASE_URL, SUPABASE_KEY } from './todo-config.js';
-import { TaskStore, Preferences, activeTasks, arrangeLists, createSupabaseRepository, dateInputValue, parseDate, searchTasks, sortTasks, upcomingTasks, validateTask } from './todo-data.js';
-import { createDemoRepository } from './todo-demo.js';
+import { LISTS, SUPABASE_URL, SUPABASE_KEY } from './todo-config.js?v=20261030-2';
+import { TaskStore, Preferences, activeTasks, arrangeLists, createSupabaseRepository, dateInputValue, parseDate, searchTasks, sortTasks, upcomingTasks, validateTask } from './todo-data.js?v=20261030-2';
+import { createDemoRepository } from './todo-demo.js?v=20261030-2';
 
 const $ = selector => document.querySelector(selector);
 const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) || location.hostname.endsWith('.local');
