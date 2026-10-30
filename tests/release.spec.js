@@ -24,8 +24,8 @@ test('release loads matching styles and module graph despite stale unversioned a
   await expect(page.locator('.sr-only')).toHaveCSS('position', 'absolute');
   expect(errors).toEqual([]);
   expect([...assets].sort()).toEqual([
-    '/todo-config.js?v=20261030-2', '/todo-data.js?v=20261030-2',
-    '/todo-demo.js?v=20261030-2', '/todo.js?v=20261030-2',
-    '/todostyles.css?v=20261030-2'
+    '/todo-config.js?v=20261030-3', '/todo-data.js?v=20261030-3',
+    '/todo-demo.js?v=20261030-3', '/todo.js?v=20261030-3',
+    '/todostyles.css?v=20261030-3'
   ].sort());
 });

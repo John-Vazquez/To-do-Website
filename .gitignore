@@ -3,3 +3,5 @@ test-results/
 playwright-report/
 .env*
 test-results-hosted/
+test-results-root-ui/
+test-results-ui-retry/

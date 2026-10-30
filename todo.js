@@ -1,6 +1,6 @@
-import { LISTS, SUPABASE_URL, SUPABASE_KEY } from './todo-config.js?v=20261030-2';
-import { TaskStore, Preferences, activeTasks, arrangeLists, createSupabaseRepository, dateInputValue, parseDate, searchTasks, sortTasks, upcomingTasks, validateTask } from './todo-data.js?v=20261030-2';
-import { createDemoRepository } from './todo-demo.js?v=20261030-2';
+import { LISTS, SUPABASE_URL, SUPABASE_KEY } from './todo-config.js?v=20261030-3';
+import { TaskStore, Preferences, activeTasks, arrangeLists, createSupabaseRepository, dateInputValue, parseDate, searchTasks, sortTasks, upcomingTasks, validateTask } from './todo-data.js?v=20261030-3';
+import { createDemoRepository } from './todo-demo.js?v=20261030-3';
 
 const $ = selector => document.querySelector(selector);
 const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) || location.hostname.endsWith('.local');
@@ -11,8 +11,8 @@ const readOnly = !demo && (local || params.get('source') === 'live');
 let storage; try { storage = localStorage; } catch { /* Browser preferences optional. */ }
 const prefs = new Preferences(storage);
 let viewMode = prefs.value.view === 'expanded' ? 'expanded' : 'compact';
-let lists = [], store, panelList, dialogState, undoTaskId, collectionMode, refreshing = false;
-const loaded = new Set(), errors = new Map(), drafts = new Map();
+let lists = [], store, dialogState, undoTaskId, collectionMode, refreshing = false;
+const loaded = new Set(), errors = new Map(), expandedLists = new Set();
 
 function el(tag, className, text) { const node = document.createElement(tag); if (className) node.className = className; if (text != null) node.textContent = text; return node; }
 function button(text, action, className = '', label = text) { const node = el('button', className, text); node.type = 'button'; node.setAttribute('aria-label', label); node.addEventListener('click', action); return node; }
@@ -36,7 +36,6 @@ function taskFields(task, destination) {
   for (const [value, label] of [['', 'None'], ['1', '1 · Low'], ['2', '2 · Medium'], ['3', '3 · High']]) { const option = el('option', '', label); option.value = value; urgency.append(option); }
   urgency.value = task?.urgency == null ? '' : String(task.urgency);
   fields.append(field('Task', text), field('List', destinationSelect(destination)), field('Deadline', date), field('Urgency', urgency));
-  if (task) { const done = input('is_done', 'true', 'checkbox'); done.checked = task.is_done === true; fields.append(field('Completed', done)); }
   return fields;
 }
 function taskMeta(task) {
@@ -45,18 +44,25 @@ function taskMeta(task) {
   if (task.due_date) { const date = parseDate(task.due_date), today = new Date(); today.setHours(0, 0, 0, 0); const due = el('span', `deadline ${date && date <= today ? 'due' : ''}`, date ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(date.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {}) }) : task.due_date); due.title = String(task.due_date); meta.append(due); }
   return meta;
 }
-function taskRow(task, list, full = false) {
-  const row = el('li', `task-row ${task.is_done === true ? 'is-done' : ''}`); row.dataset.taskId = task.id;
-  const check = input('complete', '', 'checkbox'); check.checked = task.is_done === true; check.setAttribute('aria-label', `${task.is_done === true ? 'Reopen' : 'Complete'} ${task.content}`); check.disabled = !writable(list);
-  check.addEventListener('change', async () => {
-    const done = check.checked; check.disabled = true; row.setAttribute('aria-busy', 'true');
-    try { const saved = await store.setDone(task, done, list); notify(done ? 'Task completed.' : 'Task reopened.', done ? saved.id : null); }
-    catch (failure) { check.checked = !done; errors.set(list.id, failure); errorAt($('#global-error'), failure); }
-    finally { render(); }
-  });
-  const title = button(task.content, () => openTask(currentTask(task.id) || task), 'task-title');
-  if (full) title.classList.add('full-title');
-  row.append(check, title, taskMeta(task)); return row;
+function taskIcon(kind) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');
+  svg.innerHTML = kind === 'edit' ? '<path d="m16 3 5 5-12 12-6 1 1-6Z M14 5l5 5"/>' : '<path d="M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7"/>';
+  return svg;
+}
+function taskRow(task, list) {
+  const row = el('li', 'task-row'); row.dataset.taskId = task.id;
+  const title = el('span', 'task-title', task.content), actions = el('span', 'task-actions');
+  for (const [kind, label, action] of [['edit', 'Edit', openTask], ['delete', 'Delete', openDelete]]) {
+    const control = button('', () => action(currentTask(task.id) || task), 'task-action ' + kind, label + ' ' + task.content);
+    control.title = label + ' task'; control.disabled = !writable(list); control.append(taskIcon(kind)); actions.append(control);
+  }
+  row.append(title, taskMeta(task), actions); return row;
+}
+function openDelete(task) {
+  openEditor({ title: 'Delete task', fields: el('p', 'delete-summary', task.content), task });
+  $('#delete-panel').hidden = false; $('#delete-task').hidden = true; $('#editor-save').hidden = true;
+  $('#keep-task').focus();
 }
 async function run(list, action) {
   errorAt($('#global-error'), null); errors.delete(list?.id);
@@ -68,25 +74,19 @@ function buildCard(list) {
   const tasks = sortTasks(activeTasks(store.tasks.get(list.id) || []));
   const card = el('article', `list-card ${list.fixed ? `pinned ${list.key}` : ''}`); card.dataset.listId = list.id;
   const heading = el('header', 'card-heading'), h = el('h3');
-  h.append(button(list.title, () => openList(list), 'list-title', `Open ${list.title}`));
+  h.append(list.fixed ? el('span', 'list-title', list.title) : button(list.title, () => openRename(list), 'list-title', `Rename ${list.title}`));
   const count = el('span', 'count', list.limit ? `${tasks.length}/${list.limit}` : String(tasks.length));
   heading.append(h, count, button('+', () => openQuickAdd(list), 'card-add', `Add task to ${list.title}`));
   heading.lastChild.disabled = !writable(list); card.append(heading);
   const rows = el('ul', 'task-list');
-  const visible = viewMode === 'compact' && !list.fixed ? tasks.slice(0, 5) : tasks;
+  const visible = viewMode === 'compact' && !list.fixed && !expandedLists.has(list.id) ? tasks.slice(0, 5) : tasks;
   visible.forEach(task => rows.append(taskRow(task, list)));
   if (tasks.length) card.append(rows);
-  if (tasks.length > visible.length) card.append(button(`+${tasks.length - visible.length} more`, () => openList(list), 'more-link'));
+  if (tasks.length > visible.length) card.append(button(`+${tasks.length - visible.length} more`, () => { expandedLists.add(list.id); render(); }, 'more-link'));
   const failure = errors.get(list.id);
   if (failure) card.append(el('p', 'error', failure.message));
   if (!loaded.has(list.id)) card.append(el('p', 'card-state', list.available ? 'Loading…' : 'List unavailable'));
-  if (list.fixed) {
-    const form = el('form', 'inline-add'); form.setAttribute('aria-label', `Quick add to ${list.title}`);
-    const text = input('content', drafts.get(list.id) || ''); text.placeholder = 'Add a task…'; text.setAttribute('aria-label', `New task for ${list.title}`); text.required = true; text.autocomplete = 'off';
-    text.addEventListener('input', () => drafts.set(list.id, text.value));
-    const add = el('button', '', 'Add'); add.type = 'submit'; text.disabled = add.disabled = !writable(list);
-    form.append(text, add); form.addEventListener('submit', event => { event.preventDefault(); if (!writable(list)) return; const content = text.value; run(list, async () => { await store.create(list, { content }); drafts.delete(list.id); }); }); card.append(form);
-  } else if (!tasks.length && loaded.has(list.id)) card.classList.add('empty');
+  if (!tasks.length && loaded.has(list.id)) card.classList.add('empty');
   return card;
 }
 function render() {
@@ -99,7 +99,7 @@ function render() {
   $('#overview-count').textContent = `${activeLists.reduce((count, list) => count + activeTasks(store.tasks.get(list.id) || []).length, 0)} active tasks`;
   for (const mode of ['compact', 'expanded']) $('#' + mode).setAttribute('aria-pressed', String(viewMode === mode));
   $('#quick-add').disabled = $('#add-list').disabled = readOnly || refreshing || !loaded.size;
-  renderSearch(); if ($('#list-panel').open) renderList(); if ($('#collection').open) renderCollection();
+  renderSearch(); if ($('#collection').open) renderCollection();
 }
 function renderSearch() {
   if (!store) return;
@@ -109,29 +109,13 @@ function renderSearch() {
   $('#search-results').replaceChildren(...(nodes.length ? nodes : [el('p', 'muted', 'No matches.')]));
 }
 function resultButton(list, task) {
-  const result = button('', () => { openList(list); if (task) openTask(currentTask(task.id) || task); }, 'result');
+  const result = button('', () => { if (task) openTask(currentTask(task.id) || task); else openRename(list); }, 'result');
   result.append(el('span', '', task?.content || list.title), el('small', '', `${list.title}${list.archived ? ' · Archived' : ''}${task?.is_done ? ' · Completed' : ''}`));
   if (task) result.append(taskMeta(task)); return result;
 }
-function openList(list) {
-  panelList = list; $('#show-completed').checked = false; $('#list-sort').value = 'priority';
-  renderList(); if (!$('#list-panel').open) $('#list-panel').showModal();
-}
-function renderList() {
-  const list = panelList; if (!list) return;
-  const tasks = store.tasks.get(list.id) || [], active = activeTasks(tasks), done = tasks.filter(task => task.is_done === true);
-  $('#list-panel-title').textContent = list.title;
-  $('#list-panel-count').textContent = `${active.length} active · ${done.length} completed${list.archived ? ' · Archived' : ''}`;
-  $('#rename-list').hidden = list.fixed; $('#rename-list').disabled = $('#list-add').disabled = $('#list-bulk').disabled = !writable(list);
-  errorAt($('#list-panel-error'), errors.get(list.id));
-  const body = $('#list-panel-body'), rows = el('ul', 'task-list editor-list');
-  sortTasks(active, $('#list-sort').value).forEach(task => rows.append(taskRow(task, list, true)));
-  if (!active.length) rows.append(el('li', 'muted', 'No active tasks.'));
-  body.replaceChildren(rows);
-  if ($('#show-completed').checked) { const completed = el('ul', 'task-list editor-list'); sortTasks(done, $('#list-sort').value).forEach(task => completed.append(taskRow(task, list, true))); body.append(el('h3', 'completed-heading', `Completed (${done.length})`), completed); }
-}
 function openEditor({ title, description = '', fields, saveText = 'Save', action, task }) {
   if ($('#editor').open) return;
+  $('#editor-save').hidden = false;
   $('#editor-heading').textContent = title; $('#editor-description').textContent = description;
   $('#editor-fields').replaceChildren(fields); $('#editor-save').textContent = saveText;
   $('#discard-panel').hidden = $('#delete-panel').hidden = true; errorAt($('#editor-error'), null);
@@ -154,23 +138,16 @@ function openTask(task) {
     if (data.content !== originals.content) { if (!data.content.trim()) throw new Error('Enter a task before saving.'); patch.content = data.content.trim(); }
     if (data.due_date !== originals.due_date) patch.due_date = validateTask({ content: 'valid', due_date: data.due_date }).due_date;
     if (data.urgency !== originals.urgency) patch.urgency = validateTask({ content: 'valid', urgency: data.urgency }).urgency;
-    if (Boolean(data.is_done) !== (task.is_done === true)) patch.is_done = Boolean(data.is_done);
     const destination = listById(data.list_id);
     if (Object.keys(patch).length || destination?.id !== task.list_id) await store.changeTask(task, patch, destination);
     notify('Task saved.');
   } });
 }
 function wrapForm(fields) { const form = el('form'); form.append(fields); return form; }
-function openBulk() {
-  const text = el('textarea'); text.name = 'lines'; text.rows = 9; text.required = true; text.placeholder = 'One task per line';
-  openEditor({ title: `Bulk add · ${panelList.title}`, description: 'Each non-empty line becomes a separate task.', fields: field('Tasks', text), saveText: 'Add tasks', action: async () => {
-    try { const added = await store.bulkCreate(panelList, text.value); notify(`${added.length} tasks added.`); }
-    catch (failure) { if (failure.remaining != null) text.value = failure.remaining; failure.message = `${failure.savedCount || 0} tasks saved. ${failure.message}`; throw failure; }
-  } });
-}
-function openRename() {
-  const text = input('title', panelList.title); text.required = true;
-  openEditor({ title: 'Rename list', fields: field('List title', text), action: () => store.rename(panelList, text.value) });
+function openRename(list) {
+  if (list.fixed) return;
+  const text = input('title', list.title); text.required = true;
+  openEditor({ title: 'Rename list', fields: field('List title', text), action: () => store.rename(list, text.value) });
 }
 function openNewList() {
   const text = input('title'); text.required = true; const id = crypto.randomUUID(); let uncertain = false;
@@ -185,7 +162,7 @@ function closeEditor(force = false) {
   if (!dialogState || dialogState.busy) return;
   if (!force && snapshot() !== dialogState.initial) { $('#discard-panel').hidden = false; $('#keep-editing').focus(); return; }
   const opener = dialogState.opener; $('#editor').close(); dialogState = null;
-  if (opener?.isConnected) opener.focus(); else if ($('#list-panel').open) $('#list-add').focus(); else $('#quick-add').focus();
+  if (opener?.isConnected) opener.focus(); else $('#quick-add').focus();
 }
 async function saveEditor(remove = false) {
   const state = dialogState; if (!state || state.busy || readOnly) return;
@@ -207,7 +184,7 @@ function renderCollection() {
     if (!demo && !readOnly && (prefs.value.order || prefs.value.archived)) body.append(button('Import this browser’s order and archive settings', async () => { try { const imported=prefs.importBrowserListPreferences(lists); await store.repository.saveListMetadata(imported); lists = arrangeLists(await store.repository.lists()); render(); } catch (error) { await refresh(); notify(`Could not import preferences; server state reloaded: ${error.message}`); } }));
     const ordinary = lists.filter(list => !list.fixed);
     for (const list of lists) {
-      const row = el('div', 'manage-row'); row.append(button(list.title, () => openList(list), 'manage-title'));
+      const row = el('div', 'manage-row'); row.append(button(list.title, () => openRename(list), 'manage-title'));
       if (list.fixed) row.append(el('span', 'muted', 'Pinned'));
       else {
         const index = ordinary.indexOf(list);
@@ -256,12 +233,9 @@ for (const id of ['editor-close', 'editor-cancel']) $('#' + id).addEventListener
 $('#discard-changes').onclick = () => closeEditor(true);
 $('#keep-editing').onclick = () => { $('#discard-panel').hidden = true; $('#editor-fields').querySelector('input,textarea')?.focus(); };
 $('#delete-task').onclick = () => { $('#delete-panel').hidden = false; $('#keep-task').focus(); };
-$('#keep-task').onclick = () => { $('#delete-panel').hidden = true; };
+$('#keep-task').onclick = () => { if ($('#editor-save').hidden) closeEditor(true); else $('#delete-panel').hidden = true; };
 $('#confirm-delete').onclick = () => saveEditor(true);
-for (const id of ['close-list', 'close-list-footer']) $('#' + id).onclick = () => $('#list-panel').close();
 $('#close-collection').onclick = () => $('#collection').close();
-$('#list-add').onclick = () => openQuickAdd(panelList); $('#list-bulk').onclick = openBulk; $('#rename-list').onclick = openRename;
-$('#list-sort').onchange = $('#show-completed').onchange = renderList;
 $('#quick-add').onclick = () => openQuickAdd(); $('#add-list').onclick = openNewList;
 $('#upcoming').onclick = () => openCollection('upcoming');
 $('#manage-lists').onclick = () => { $('.menu').open = false; openCollection('manage'); };
@@ -270,7 +244,7 @@ $('#search').addEventListener('input', renderSearch); $('#search-completed').onc
 for (const mode of ['compact', 'expanded']) $('#' + mode).onclick = () => { viewMode = mode; remember('view', mode); render(); };
 $('#dismiss-notification').onclick = () => { $('#notification').hidden = true; undoTaskId = null; };
 $('#undo').onclick = async () => { const task = currentTask(undoTaskId); if (!task) { notify('Task no longer available. Refresh data.'); return; } await run(listById(task.list_id), async () => { await store.setDone(task, false, listById(task.list_id)); notify('Completion undone.'); }); };
-window.addEventListener('beforeunload', event => { if ([...drafts.values()].some(Boolean) || store?.pending.size || dialogState?.busy || (dialogState && snapshot() !== dialogState.initial)) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { if (store?.pending.size || dialogState?.busy || (dialogState && snapshot() !== dialogState.initial)) { event.preventDefault(); event.returnValue = ''; } });
 $('#mode-badge').textContent = demo ? 'DEMO' : 'LIVE';
 $('#mode-notice').textContent = demo ? 'Sample data · resets on reload' : readOnly ? 'Read-only local live preview' : 'Public live lists';
 refresh();

@@ -12,8 +12,8 @@
   <link rel="manifest" href="todo.webmanifest">
   <link rel="icon" href="icons/todo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="todostyles.css?v=20261030-2">
-  <script type="module" src="todo.js?v=20261030-2"></script>
+  <link rel="stylesheet" href="todostyles.css?v=20261030-3">
+  <script type="module" src="todo.js?v=20261030-3"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to lists</a>
@@ -35,13 +35,6 @@
     <noscript><p class="error">Enable JavaScript to manage tasks.</p></noscript>
   </main>
   <div id="notification" class="notification" role="status" hidden><span id="notification-text"></span><button id="undo" type="button" hidden>Undo</button><button id="dismiss-notification" type="button" aria-label="Dismiss notification">×</button></div>
-  <dialog id="list-panel" class="list-panel" aria-labelledby="list-panel-title">
-    <div class="panel-heading"><h2 id="list-panel-title"></h2><span id="list-panel-count" class="count"></span><button id="rename-list" type="button">Rename</button><button id="close-list" type="button" aria-label="Close list">×</button></div>
-    <div class="panel-tools"><button id="list-add" class="primary" type="button">+ Add task</button><button id="list-bulk" type="button">Bulk add</button><label class="sort-label">Sort <select id="list-sort"><option value="priority">Urgency first</option><option value="date">Deadline first</option></select></label><label><input id="show-completed" type="checkbox"> Show completed</label></div>
-    <p id="list-panel-error" class="error" role="alert" hidden></p>
-    <div id="list-panel-body" class="panel-body"></div>
-    <div class="panel-footer"><span>Task changes are saved individually.</span><button id="close-list-footer" type="button">Close</button></div>
-  </dialog>
   <dialog id="collection" class="list-panel" aria-labelledby="collection-title"><div class="panel-heading"><h2 id="collection-title"></h2><button id="close-collection" type="button" aria-label="Close panel">×</button></div><div id="collection-body" class="panel-body"></div></dialog>
   <dialog id="editor" class="task-editor" aria-labelledby="editor-heading">
     <form id="editor-form"><div class="panel-heading"><h2 id="editor-heading"></h2><button id="editor-close" type="button" aria-label="Close editor">×</button></div><p id="editor-description" class="muted"></p><div id="editor-fields"></div><p id="editor-error" class="error" role="alert" hidden></p><div id="discard-panel" class="confirmation" hidden><p>Discard unsaved changes?</p><button id="keep-editing" type="button">Keep editing</button><button id="discard-changes" class="danger" type="button">Discard changes</button></div><div id="delete-panel" class="confirmation" hidden><p>Permanently delete this task? This cannot be undone.</p><button id="keep-task" type="button">Keep task</button><button id="confirm-delete" class="danger" type="button">Delete permanently</button></div><div class="editor-actions"><button id="delete-task" class="danger-outline" type="button" hidden>Delete task…</button><span></span><button id="editor-cancel" type="button">Cancel</button><button id="editor-save" class="primary" type="submit">Save</button></div></form>

@@ -1,12 +1,17 @@
 # Functional redesign
 
+## Current interaction update
+
+The overview is centered within 1180px. Doing Right Now is full width above Must Do Today; ordinary lists use three columns when space permits, two on tablet and one on mobile. Each task exposes pencil/edit and confirmed-delete actions on hover or keyboard focus, always visible on touch devices. Task completion checkboxes and the full-list/bulk-add dialog have been removed. Ordinary list titles open only the rename dialog; pinned names remain protected. Card plus buttons add tasks, and +N more expands that card inline. Existing task data and completion flags are preserved.
+
+
 October 30, 2026. Work builds on `5dd0e78` in the selected local checkout, on `codex/todo-functional-redesign`. The owner subsequently authorized pushing/deploying finished work and applying applicable backend changes. Authorization is available; backend **access and verification** remain separate prerequisites.
 
 ## Working features
 
-The overview has a compact toolbar, search, Quick Add, Add List, Upcoming and an actions menu. Pinned lists appear side by side on desktop and stack on mobile. Ordinary cards use three/two/one responsive columns. Compact mode shows up to five active tasks and an exact remaining count. Expanded mode removes that limit. Empty cards contain their title/count/add control only.
+The overview has a compact toolbar, search, Quick Add, Add List, Upcoming and an actions menu. Pinned lists stack vertically. Ordinary cards use three/two/one responsive columns within a centered, bounded canvas. Compact mode shows up to five active tasks and an exact remaining count. Expanded mode removes that limit. Empty cards contain their title/count/add control only.
 
-Every task can open its details. Full list editors show all active tasks with add, bulk add, rename, urgency/deadline sorting and optional completed rows. Mobile editors fill the screen. Individual dialogs have Save, Cancel, Close, explicit unsaved-discard and permanent-delete confirmation. No repeated deadline/urgency forms appear in overview cards.
+Every task has a pencil to open its details and a trash icon to confirm deletion. Ordinary list titles open rename only. The full-list and bulk-add panel is removed. Mobile task editors fill the screen. Individual dialogs have Save, Cancel, Close, explicit unsaved-discard and permanent-delete confirmation. No repeated deadline/urgency forms appear in overview cards.
 
 Quick Add remembers its successful destination. Moves update `list_id` on the original task, preserving ID, creation timestamp, unedited legacy dates, completion and unrelated metadata. Completion writes `is_done: true`; reopen/Undo writes `false`. It never deletes the record. Permanent deletion remains a separate confirmed action.
 
