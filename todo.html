@@ -2,190 +2,45 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>To-Do Web App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f7f9">
+  <meta name="description" content="A little focus. All your lists, together in one place.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="To do">
+  <title>To do — a little focus</title>
+  <link rel="manifest" href="todo.webmanifest">
+  <link rel="icon" href="icons/todo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="todostyles.css">
-  <script src="https://unpkg.com/@supabase/supabase-js"></script>
-  <script defer src="todo.js"></script>
+  <script type="module" src="todo.js"></script>
 </head>
 <body>
-  <header>
-    <h1>To-Do Web App</h1>
+  <a class="skip-link" href="#main">Skip to lists</a>
+  <header class="app-header">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">✓</span><h1>To do<span class="brand-caption">a little focus</span></h1></div>
+    <a class="back-link" href="personal.html">Personal home <span aria-hidden="true">↗</span></a>
   </header>
-
-  <div class="todo-container">
-
-    <!-- Doing Right Now -->
-    <div class="list-box">
-      <h2>Doing Right Now</h2>
-      <div class="task-box">
-        <form onsubmit="addTask(LIST_IDS.doing,'doingInput','doingDate','doingList');return false;">
-          <input id="doingInput" placeholder="Enter task">
-          <div class="due-slot">
-            <select id="doingDateMode" class="due-mode" onchange="syncDueMode('doingDateMode','doingDate')">
-              <option value="date" selected>📅</option>
-              <option value="urgency">⚡</option>
-            </select>
-            <input id="doingDate" placeholder="MM/DD" data-mode="date">
-          </div>
-          <button type="submit">Add</button>
-        </form>
-        <ul id="doingList"></ul>
-      </div>
-    </div>
-
-    <!-- Must Do Today -->
-    <div class="list-box">
-      <h2>Must Do Today</h2>
-      <div class="task-box">
-        <form onsubmit="addTask(LIST_IDS.must,'mustInput','mustDate','mustList',3);return false;">
-          <input id="mustInput" placeholder="Enter task">
-          <div class="due-slot">
-            <select id="mustDateMode" class="due-mode" onchange="syncDueMode('mustDateMode','mustDate')">
-              <option value="date" selected>📅</option>
-              <option value="urgency">⚡</option>
-            </select>
-            <input id="mustDate" placeholder="MM/DD" data-mode="date">
-          </div>
-          <button type="submit">Add</button>
-        </form>
-        <ul id="mustList"></ul>
-      </div>
-    </div>
-
-    <!-- Expand/Collapse toggle -->
-    <div class="view-toggle">
-      <button id="toggleViewBtn">🔍 Expand View</button>
-    </div>
-
-    
-    <!-- Other Important Lists -->
-    <h2>Other Important Lists</h2>
-    <div class="task-section">
-      <div class="task-box">
-        <h3><span id="otherTitle1" onclick="editTitle('otherTitle1',LIST_IDS.other1)">Important 1</span></h3>
-        <form onsubmit="addTask(LIST_IDS.other1,'otherInput1','otherDate1','otherList1');return false;">
-          <input id="otherInput1" placeholder="Enter task">
-          <div class="due-slot">
-            <select id="otherDate1Mode" class="due-mode" onchange="syncDueMode('otherDate1Mode','otherDate1')">
-              <option value="date" selected>📅</option>
-              <option value="urgency">⚡</option>
-            </select>
-            <input id="otherDate1" placeholder="MM/DD" data-mode="date">
-          </div>
-          <button type="submit">Add</button>
-        </form>
-        <ul id="otherList1"></ul>
-      </div>
-      <div class="task-box">
-        <h3><span id="otherTitle2" onclick="editTitle('otherTitle2',LIST_IDS.other2)">Important 2</span></h3>
-        <form onsubmit="addTask(LIST_IDS.other2,'otherInput2','otherDate2','otherList2');return false;">
-          <input id="otherInput2" placeholder="Enter task">
-          <div class="due-slot">
-            <select id="otherDate2Mode" class="due-mode" onchange="syncDueMode('otherDate2Mode','otherDate2')">
-              <option value="date" selected>📅</option>
-              <option value="urgency">⚡</option>
-            </select>
-            <input id="otherDate2" placeholder="MM/DD" data-mode="date">
-          </div>
-          <button type="submit">Add</button>
-        </form>
-        <ul id="otherList2"></ul>
-      </div>
-      <div class="task-box">
-        <h3><span id="otherTitle3" onclick="editTitle('otherTitle3',LIST_IDS.other3)">Important 3</span></h3>
-        <form onsubmit="addTask(LIST_IDS.other3,'otherInput3','otherDate3','otherList3');return false;">
-          <input id="otherInput3" placeholder="Enter task">
-          <div class="due-slot">
-            <select id="otherDate3Mode" class="due-mode" onchange="syncDueMode('otherDate3Mode','otherDate3')">
-              <option value="date" selected>📅</option>
-              <option value="urgency">⚡</option>
-            </select>
-            <input id="otherDate3" placeholder="MM/DD" data-mode="date">
-          </div>
-          <button type="submit">Add</button>
-        </form>
-        <ul id="otherList3"></ul>
-      </div>
-      <div class="task-box">
-        <h3><span id="otherTitle4" onclick="editTitle('otherTitle4',LIST_IDS.other4)">Important 4</span></h3>
-        <form onsubmit="addTask(LIST_IDS.other4,'otherInput4','otherDate4','otherList4');return false;">
-          <input id="otherInput4" placeholder="Enter task">
-          <div class="due-slot">
-            <select id="otherDate4Mode" class="due-mode" onchange="syncDueMode('otherDate4Mode','otherDate4')">
-              <option value="date" selected>📅</option>
-              <option value="urgency">⚡</option>
-            </select>
-            <input id="otherDate4" placeholder="MM/DD" data-mode="date">
-          </div>
-          <button type="submit">Add</button>
-        </form>
-        <ul id="otherList4"></ul>
-      </div>
-            <div class="task-box">
-        <h3><span id="otherTitle5" onclick="editTitle('otherTitle5',LIST_IDS.other5)">Important 5</span></h3>
-        <form onsubmit="addTask(LIST_IDS.other5,'otherInput5','otherDate5','otherList5');return false;">
-          <input id="otherInput5" placeholder="Enter task">
-          <div class="due-slot">
-            <select id="otherDate5Mode" class="due-mode" onchange="syncDueMode('otherDate5Mode','otherDate5')">
-              <option value="date" selected>📅</option>
-              <option value="urgency">⚡</option>
-            </select>
-            <input id="otherDate5" placeholder="MM/DD" data-mode="date">
-          </div>
-          <button type="submit">Add</button>
-        </form>
-        <ul id="otherList5"></ul>
-      </div>
-
-      <div class="task-box">
-        <h3><span id="otherTitle6" onclick="editTitle('otherTitle6',LIST_IDS.other6)">Important 6</span></h3>
-        <form onsubmit="addTask(LIST_IDS.other6,'otherInput6','otherDate6','otherList6');return false;">
-          <input id="otherInput6" placeholder="Enter task">
-          <div class="due-slot">
-            <select id="otherDate6Mode" class="due-mode" onchange="syncDueMode('otherDate6Mode','otherDate6')">
-              <option value="date" selected>📅</option>
-              <option value="urgency">⚡</option>
-            </select>
-            <input id="otherDate6" placeholder="MM/DD" data-mode="date">
-          </div>
-          <button type="submit">Add</button>
-        </form>
-        <ul id="otherList6"></ul>
-      </div>
-
-      <div class="task-box">
-        <h3><span id="otherTitle7" onclick="editTitle('otherTitle7',LIST_IDS.other7)">Important 7</span></h3>
-        <form onsubmit="addTask(LIST_IDS.other7,'otherInput7','otherDate7','otherList7');return false;">
-          <input id="otherInput7" placeholder="Enter task">
-          <div class="due-slot">
-            <select id="otherDate7Mode" class="due-mode" onchange="syncDueMode('otherDate7Mode','otherDate7')">
-              <option value="date" selected>📅</option>
-              <option value="urgency">⚡</option>
-            </select>
-            <input id="otherDate7" placeholder="MM/DD" data-mode="date">
-          </div>
-          <button type="submit">Add</button>
-        </form>
-        <ul id="otherList7"></ul>
-      </div>
-
-      <div class="task-box">
-        <h3><span id="otherTitle8" onclick="editTitle('otherTitle8',LIST_IDS.other8)">Important 8</span></h3>
-        <form onsubmit="addTask(LIST_IDS.other8,'otherInput8','otherDate8','otherList8');return false;">
-          <input id="otherInput8" placeholder="Enter task">
-          <div class="due-slot">
-            <select id="otherDate8Mode" class="due-mode" onchange="syncDueMode('otherDate8Mode','otherDate8')">
-              <option value="date" selected>📅</option>
-              <option value="urgency">⚡</option>
-            </select>
-            <input id="otherDate8" placeholder="MM/DD" data-mode="date">
-          </div>
-          <button type="submit">Add</button>
-        </form>
-        <ul id="otherList8"></ul>
-      </div>
-
-    </div>
-  </div>
+  <main id="main" class="workspace">
+    <div class="page-intro"><div><p class="eyebrow">ONE THING AT A TIME</p><p class="intro-copy">Make room for what matters.</p></div><p id="today-label" class="today-label"></p></div>
+    <div id="mode-notice" class="mode-notice" hidden></div>
+    <div class="connection-bar"><p id="connection-status" role="status">Connecting to your lists…</p><button id="reload-all" class="quiet" type="button">Refresh lists</button></div>
+    <p id="global-error" class="error" role="alert" hidden></p>
+    <div id="focus-lists" class="focus-lists" aria-label="Focus lists"></div>
+    <div class="section-heading"><div><p class="eyebrow">THE REST, ALL HERE</p><h2>Other Important Lists</h2></div><span class="section-note">A place for everything.</span></div>
+    <div id="other-lists" class="list-grid"></div>
+    <noscript><p class="error">JavaScript is required to load and save your lists.</p></noscript>
+    <footer class="app-footer">A little progress counts.<span>All your lists. One place.</span></footer>
+  </main>
+  <dialog id="editor" aria-labelledby="editor-heading">
+    <form id="editor-form">
+      <div class="dialog-heading"><h2 id="editor-heading">Edit task</h2><button id="editor-close" type="button" class="icon-button" aria-label="Close editor">×</button></div>
+      <p id="editor-description" class="muted"></p>
+      <div id="editor-fields"></div>
+      <p id="editor-error" class="error" role="alert" hidden></p>
+      <div id="discard-panel" class="discard-panel" hidden><p>You have unsaved changes. Discard them?</p><button id="keep-editing" type="button" class="quiet">Keep editing</button><button id="discard-changes" type="button" class="danger">Discard changes</button></div>
+      <div class="dialog-actions"><button id="editor-cancel" type="button" class="quiet">Cancel</button><button id="editor-save" type="submit" class="primary">Save changes</button></div>
+    </form>
+  </dialog>
 </body>
 </html>

@@ -1,383 +1,255 @@
-// ===== todo.js (full) =====
+import { LISTS, SUPABASE_URL, SUPABASE_KEY } from './todo-config.js';
+import { TaskStore, arrangeLists, createSupabaseRepository, dateInputValue, parseDate, sortTasks, validateTask } from './todo-data.js';
+import { createDemoRepository } from './todo-demo.js';
 
-// Supabase setup
-const { createClient } = supabase;
-const supabaseUrl = "https://walsvybskelqhgvpdagj.supabase.co";
-const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndhbHN2eWJza2VscWhndnBkYWdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc4MDQyMjUsImV4cCI6MjA3MzM4MDIyNX0.tDaLE2F2gOZnqU06Qt9XvgfeV3Qo9kdhmr-mZem7cV4";
-const supabaseClient = createClient(supabaseUrl, supabaseKey);
+const $ = selector => document.querySelector(selector);
+const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) || location.hostname.endsWith('.local');
+const params = new URLSearchParams(location.search);
+const demo = params.has('demo') || (local && params.get('source') !== 'live');
+const readOnly = local && !demo;
+const cards = new Map();
+let lists = LISTS.map(list => ({ ...list, available: false }));
+let store;
+let loading = false;
+let dialogState;
+const editor = $('#editor');
 
-// List IDs (from your Supabase rows)
-const LIST_IDS = {
-  doing:    "b093c6d8-9ed6-41ec-9667-2467066b84d3",
-  must:     "df9db72b-b8ee-4178-bc1d-e5f55c9dcca7",
-  discrete: "6226fc41-18d7-46af-95c3-4b320300b793",
-  calc:     "401cf998-6e39-4581-a2b6-0bc9655870cf",
-  cyber:    "3a396ff1-962b-4357-91ff-d19fefa4a3ac",
-  topics:   "61d6d0f2-2112-4cb2-9ee8-17119b631756",
-  other1:   "32dd9a59-8fa4-45f3-a20f-e801549179d1",
-  other2:   "2ff32464-e2a3-43c5-adfc-cbe17439ad7d",
-  other3:   "63d46c8e-16f1-4c88-b4e8-09fdfa9e93fe",
-  other4:   "e88dc7fa-6815-4eb9-8d02-cd5c023d853f",
-  other5:   "f55cf27c-0226-4440-874e-c47b7294cbf3",
-  other6:   "6715ee6e-5d0f-429d-959d-3b1ea829ccf4",
-  other7:   "3f716ddf-bec1-43c1-8044-410571761697",
-  other8:   "ab443152-9534-4647-8f51-ab1ffd3867ca"
-};
-
-// UL ids in the HTML
-const UL_IDS = {
-  doing: "doingList",
-  must: "mustList",
-  discrete: "discreteList",
-  calc: "calcList",
-  cyber: "cyberList",
-  topics: "topicsList",
-  other1: "otherList1",
-  other2: "otherList2",
-  other3: "otherList3",
-  other4: "otherList4",
-  other5: "otherList5",
-  other6: "otherList6",
-  other7: "otherList7",
-  other8: "otherList8"
-};
-
-// Title span ids for "Other Important Lists"
-const TITLE_SPAN_IDS = {
-  other1: "otherTitle1",
-  other2: "otherTitle2",
-  other3: "otherTitle3",
-  other4: "otherTitle4",
-  other5: "otherTitle5",
-  other6: "otherTitle6",
-  other7: "otherTitle7",
-  other8: "otherTitle8"
-};
-
-// ---------- Utils ----------
-function parseMMDD(mmdd) {
-  const m = /^\s*(\d{1,2})\s*\/\s*(\d{1,2})\s*$/.exec(mmdd || "");
-  if (!m) return null;
-  const month = +m[1], day = +m[2];
-  const year = new Date().getFullYear();
-  const d = new Date(year, month - 1, day);
-  if (d.getMonth() + 1 !== month || d.getDate() !== day) return null;
-  return d;
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
 }
-
-function parseFlexibleDate(s) {
-  if (!s) return null;
-  const d1 = parseMMDD(s);
-  if (d1) return d1;
-  const d2 = new Date(s);
-  return isNaN(d2.getTime()) ? null : d2;
+function button(text, label, action, className = 'icon-button') {
+  const node = el('button', className, text);
+  node.type = 'button'; node.setAttribute('aria-label', label); node.title = label;
+  node.addEventListener('click', action); return node;
 }
-
-function parseUrgency(raw) {
-  const s = (raw ?? "").toString().trim();
-  if (!s) return null;
-  if (/^[1-3]$/.test(s)) return Number(s);
-  return null;
+function showError(node, error) {
+  node.hidden = !error;
+  node.textContent = error ? error.message || String(error) : '';
 }
-
-function getDueModeForInputId(inputId) {
-  const modeEl = document.getElementById(`${inputId}Mode`);
-  return (modeEl?.value || "date").toString();
+function makeField(label, input) {
+  const wrapper = el('label', 'field');
+  wrapper.append(el('span', 'field-label', label), input); return wrapper;
 }
-
-// Keeps the "Date / Urgency" slot feeling like one control.
-function syncDueMode(modeSelectId, inputId) {
-  const modeEl = document.getElementById(modeSelectId);
-  const inputEl = document.getElementById(inputId);
-  if (!modeEl || !inputEl) return;
-
-  const mode = modeEl.value;
-  inputEl.value = "";
-  inputEl.dataset.mode = mode;
-
-  if (mode === "urgency") {
-    inputEl.placeholder = "1-3";
-    inputEl.inputMode = "numeric";
-    inputEl.maxLength = 1;
-  } else {
-    inputEl.placeholder = "MM/DD";
-    inputEl.removeAttribute("inputmode");
-    inputEl.removeAttribute("maxlength");
+function urgencySelect() {
+  const input = el('select'); input.name = 'urgency';
+  for (const [value, label] of [['', 'No urgency'], ['1', '1 · Low'], ['2', '2 · Medium'], ['3', '3 · High']]) {
+    const option = el('option', '', label); option.value = value; input.append(option);
   }
+  return input;
 }
-
-function ordinal(n) {
-  if (n % 100 >= 11 && n % 100 <= 13) return n + "th";
-  switch (n % 10) {
-    case 1: return n + "st";
-    case 2: return n + "nd";
-    case 3: return n + "rd";
-    default: return n + "th";
-  }
+function taskFields({ content = '', due_date = '', urgency = '' } = {}, multiline = false) {
+  const text = el(multiline ? 'textarea' : 'input'); text.name = 'content'; text.value = content; text.required = true;
+  text.placeholder = 'What needs doing?'; text.autocomplete = 'off'; if (multiline) text.rows = 3;
+  const date = el('input'); date.name = 'due_date'; date.type = 'date'; date.value = dateInputValue(due_date);
+  if (due_date && !date.value) { date.type = 'text'; date.value = due_date; }
+  const priority = urgencySelect(); priority.value = urgency == null ? '' : String(urgency);
+  const fields = el('div', multiline ? 'edit-fields' : 'add-fields');
+  fields.append(makeField('Task', text), makeField('Due date', date), makeField('Urgency', priority));
+  return { fields, text, date, priority };
 }
+function formValues(form) { return Object.fromEntries(new FormData(form)); }
+function snapshot() { return JSON.stringify(formValues($('#editor-form'))); }
 
-function formatLongNoYearWithOrdinal(date) {
-  const weekday = date.toLocaleDateString("en-US", { weekday: "long" });
-  const month = date.toLocaleDateString("en-US", { month: "long" });
-  const day = ordinal(date.getDate());
-  return `${weekday} ${month} ${day}`;
-}
-
-// New short formatters
-function formatShortDate(date) {
-  const weekday = date.toLocaleDateString("en-US", { weekday: "short" }); // Mon
-  const day = date.getDate();
-  return `${weekday} ${day}`;
-}
-
-function formatUltraShortDate(date) {
-  const weekday = date.toLocaleDateString("en-US", { weekday: "narrow" }); // M
-  const day = date.getDate();
-  return `${weekday} ${day}`;
-}
-
-// ---------- Load ----------
-document.addEventListener("DOMContentLoaded", () => {
-  loadAllData();
-
-  // Toggle button logic
-  const toggleBtn = document.getElementById("toggleViewBtn");
-  if (toggleBtn) {
-    toggleBtn.addEventListener("click", () => {
-      document.body.classList.toggle("expanded");
-
-      if (document.body.classList.contains("expanded")) {
-        toggleBtn.textContent = "📋 Compact View";
-      } else {
-        toggleBtn.textContent = "🔍 Expand View";
-      }
+function buildCards() {
+  cards.clear(); $('#focus-lists').replaceChildren(); $('#other-lists').replaceChildren();
+  for (const list of lists) {
+    const card = el('section', `list-card ${list.key === 'doing' ? 'doing-card' : list.key === 'must' ? 'must-card' : ''}`);
+    card.dataset.listId = list.id; card.setAttribute('aria-labelledby', `title-${list.key}`);
+    const heading = el('div', 'card-heading');
+    const titleGroup = el('div', 'title-group');
+    const title = el(list.fixed ? 'h2' : 'h3', '', list.title); title.id = `title-${list.key}`;
+    const count = el('span', 'task-count', '…'); titleGroup.append(title, count); heading.append(titleGroup);
+    if (!list.fixed) {
+      const rename = button('✎', `Rename ${list.title}`, () => openRename(list)); rename.dataset.mutate = ''; heading.append(rename);
+    }
+    const sort = el('select', 'sort-select'); sort.setAttribute('aria-label', `Sort ${list.title}`);
+    for (const [value, label] of [['priority', 'Urgency first'], ['date', 'Due date first']]) {
+      const option = el('option', '', label); option.value = value; sort.append(option);
+    }
+    sort.addEventListener('change', () => renderTasks(list)); heading.append(sort);
+    const taskList = el('ul', 'task-list'); taskList.setAttribute('aria-label', `${list.title} tasks`);
+    const hint = el('p', 'list-hint', list.key === 'doing' ? 'Your attention goes here.' : list.key === 'must' ? 'Three priorities. A little more focus.' : ''); hint.hidden = !hint.textContent;
+    const state = el('p', 'list-state', 'Loading tasks…'); state.setAttribute('role', 'status');
+    const error = el('p', 'error'); error.setAttribute('role', 'alert'); error.hidden = true;
+    const reload = button('Reload list', `Reload ${list.title}`, () => loadList(list), 'quiet reload-list'); reload.hidden = true;
+    const form = el('form', 'add-form'); form.setAttribute('aria-label', `Add to ${list.title}`);
+    const fields = taskFields();
+    const add = el('button', 'primary add-button', '+ Add task'); add.type = 'submit'; add.dataset.mutate = '';
+    fields.fields.append(add); form.append(fields.fields);
+    form.querySelectorAll('input, select').forEach(input => input.dataset.mutate = '');
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (store.pending.has(list.id) || !cards.get(list.id).loaded || readOnly) return;
+      const values = formValues(form);
+      try {
+        const promise = store.create(list, values);
+        setBusy(list, true, 'Saving task…'); await promise;
+        form.reset(); showError(error, null); reload.hidden = true; renderTasks(list); state.textContent = 'Task saved.';
+      } catch (failure) {
+        showError(error, failure); reload.hidden = false; state.textContent = 'Task was not confirmed saved. Your draft is still here.';
+        renderTasks(list);
+      } finally { setBusy(list, false); fields.text.focus(); }
     });
+    card.append(heading, hint, taskList, state, error, reload, form);
+    cards.set(list.id, { card, title, count, taskList, state, error, reload, form, sort, loaded: false });
+    (list.fixed ? $('#focus-lists') : $('#other-lists')).append(card); setBusy(list, true);
+  }
+}
+function setBusy(list, busy, message) {
+  const view = cards.get(list.id); view.card.setAttribute('aria-busy', String(busy));
+  view.card.querySelectorAll('[data-mutate]').forEach(node => node.disabled = busy || view.loading || readOnly || !view.loaded || !list.available);
+  view.reload.disabled = busy || view.loading; if (message) view.state.textContent = message;
+}
+function renderTasks(list) {
+  const view = cards.get(list.id), tasks = store.tasks.get(list.id) || [];
+  view.count.textContent = list.limit ? `${tasks.length} / ${list.limit}` : String(tasks.length);
+  view.taskList.replaceChildren();
+  for (const task of sortTasks(tasks, view.sort.value)) {
+    const row = el('li', 'task-row'); row.dataset.taskId = task.id;
+    const complete = button('✓', `Complete ${task.content}`, () => openRemove(list, task, true), 'icon-button complete-button'); complete.dataset.mutate = '';
+    const body = el('div', 'task-body'); body.append(el('span', 'task-content', task.content));
+    const meta = el('div', 'task-meta');
+    if (task.urgency) meta.append(el('span', `priority priority-${task.urgency}`, `${['', 'Low', 'Medium', 'High'][task.urgency] || task.urgency} urgency`));
+    if (task.due_date) {
+      const date = parseDate(task.due_date), today = new Date(); today.setHours(0, 0, 0, 0);
+      const overdue = date && date < today, sameDay = date && +date === +today;
+      const formatted = date ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(date.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {}) }) : task.due_date;
+      const badge = el('span', `due-date ${overdue || sameDay ? 'due-soon' : ''}`, `${overdue ? 'Overdue · ' : sameDay ? 'Today · ' : ''}${formatted}`);
+      badge.title = String(task.due_date); meta.append(badge);
+    }
+    if (meta.childElementCount) body.append(meta);
+    const edit = button('✎', `Edit ${task.content}`, () => openEdit(list, task)); edit.dataset.mutate = '';
+    const remove = button('×', `Delete ${task.content}`, () => openRemove(list, task, false), 'icon-button delete-button'); remove.dataset.mutate = '';
+    row.append(complete, body, edit, remove); view.taskList.append(row);
+  }
+  if (!tasks.length && view.loaded) view.taskList.append(el('li', 'empty-state', 'A little breathing room. Add a task below.'));
+  setBusy(list, store.pending.has(list.id));
+}
+async function loadList(list) {
+  if (!list.available || store.pending.has(list.id)) return;
+  const view = cards.get(list.id); if (view.loading) return;
+  view.loading = true; setBusy(list, true, 'Loading tasks…');
+  try {
+    await store.load(list.id); view.loaded = true;
+    showError(view.error, null); view.reload.hidden = true; renderTasks(list); view.state.textContent = '';
+  } catch (failure) {
+    showError(view.error, new Error(`Could not load this list: ${failure.message}`)); view.reload.hidden = false; view.state.textContent = 'Refresh to try again.';
+  } finally { view.loading = false; setBusy(list, false); }
+}
+async function loadAll() {
+  if (loading || store?.pending.size) return;
+  loading = true; $('#reload-all').disabled = true; showError($('#global-error'), null);
+  try {
+    if (!store) {
+      let repository;
+      if (demo) repository = createDemoRepository();
+      else {
+        // Exact version; demo makes no CDN or DB calls.
+        const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/+esm');
+        repository = createSupabaseRepository(createClient(SUPABASE_URL, SUPABASE_KEY), { readOnly });
+      }
+      const lock = navigator.locks ? (id, action) => navigator.locks.request(`todo-list:${id}`, action) : undefined;
+      store = new TaskStore(repository, { lock });
+    }
+    const nextLists = arrangeLists(await store.repository.lists());
+    if (cards.size && lists.length === nextLists.length && lists.every((list, index) => list.id === nextLists[index].id)) {
+      lists.forEach((list, index) => { Object.assign(list, nextLists[index]); updateTitle(list); });
+    } else {
+      if (hasDrafts()) throw new Error('Your list collection changed. Keep a copy of your draft before reloading the page.');
+      lists = nextLists; buildCards();
+    }
+    await Promise.all(lists.map(async list => {
+      if (list.available) await loadList(list);
+      else { const view = cards.get(list.id); view.state.textContent = 'List unavailable. Its original identifier is preserved.'; setBusy(list, false); }
+    }));
+    const failed = lists.some(list => list.available && !cards.get(list.id).error.hidden);
+    $('#connection-status').textContent = failed ? 'Some lists could not load. See the message on each list.' : demo ? 'Demo ready · changes stay in this tab' : readOnly ? 'Live lists loaded · read-only preview' : 'Connected to Supabase';
+  } catch (failure) {
+    showError($('#global-error'), new Error(`Could not load your lists: ${failure.message}`));
+    $('#connection-status').textContent = 'Connection failed. Your drafts have been kept.';
+  } finally { loading = false; $('#reload-all').disabled = false; }
+}
+function updateTitle(list) {
+  const view = cards.get(list.id); view.title.textContent = list.title;
+  view.form.setAttribute('aria-label', `Add to ${list.title}`); view.sort.setAttribute('aria-label', `Sort ${list.title}`);
+  view.taskList.setAttribute('aria-label', `${list.title} tasks`);
+  view.reload.setAttribute('aria-label', `Reload ${list.title}`); view.reload.title = `Reload ${list.title}`;
+  const rename = view.card.querySelector('.card-heading [data-mutate]');
+  if (rename) { rename.setAttribute('aria-label', `Rename ${list.title}`); rename.title = `Rename ${list.title}`; }
+}
+function openDialog({ title, description, fields, saveText = 'Save changes', action, list, destructive = false }) {
+  if (editor.open || readOnly || store.pending.has(list.id)) return;
+  $('#editor-heading').textContent = title; $('#editor-description').textContent = description;
+  $('#editor-fields').replaceChildren(...(fields ? [fields] : []));
+  $('#editor-save').textContent = saveText; $('#editor-save').className = destructive ? 'danger' : 'primary';
+  $('#discard-panel').hidden = true; showError($('#editor-error'), null);
+  dialogState = { action, list, saveText, saving: false, opener: document.activeElement };
+  dialogState.initial = snapshot(); editor.showModal();
+  (fields?.querySelector('textarea, input') || $('#editor-cancel')).focus();
+}
+function openEdit(list, task) {
+  const { fields, date, priority, text } = taskFields(task, true);
+  const originalDate = date.value, originalPriority = priority.value, originalText = text.value;
+  openDialog({ title: 'Edit task', description: list.title, fields, list, action: async () => {
+    const values = formValues($('#editor-form')), patch = {};
+    if (values.content !== originalText) { if (!values.content.trim()) throw new Error('Enter a task before saving.'); patch.content = values.content.trim(); }
+    if (values.due_date !== originalDate) patch.due_date = validateTask({ content: 'valid', due_date: values.due_date }).due_date;
+    if (values.urgency !== originalPriority) patch.urgency = validateTask({ content: 'valid', urgency: values.urgency }).urgency;
+    // Unchanged legacy dates and other columns are never rewritten.
+    if (Object.keys(patch).length) await store.update(task, patch);
+    renderTasks(list); cards.get(list.id).state.textContent = 'Changes saved.';
+  } });
+}
+function openRename(list) {
+  const input = el('input'); input.name = 'title'; input.required = true; input.value = list.title;
+  openDialog({ title: 'Rename list', description: 'Keep a name that makes sense to you.', fields: makeField('List title', input), list, action: async () => {
+    await store.rename(list, input.value); updateTitle(list); cards.get(list.id).state.textContent = 'List title saved.';
+  } });
+}
+function openRemove(list, task, complete) {
+  openDialog({ title: complete ? 'Complete this task?' : 'Delete this task?', description: 'This removes the task permanently. Completion history and undo are not available yet.', fields: el('p', 'confirm-task', task.content), saveText: complete ? 'Complete & remove' : 'Delete task', list, destructive: true, action: async () => {
+    await store.remove(task); renderTasks(list); cards.get(list.id).state.textContent = complete ? 'Task completed and removed.' : 'Task deleted.';
+  } });
+}
+function closeEditor(force = false) {
+  if (!dialogState || dialogState.saving) return;
+  if (!force && snapshot() !== dialogState.initial) { $('#discard-panel').hidden = false; $('#keep-editing').focus(); return; }
+  const { opener, list } = dialogState; editor.close(); dialogState = null;
+  if (opener?.isConnected) opener.focus(); else cards.get(list.id).form.querySelector('input')?.focus();
+}
+$('#editor-form').addEventListener('submit', async event => {
+  event.preventDefault(); if (dialogState.saving) return;
+  const state = dialogState; state.saving = true;
+  $('#editor-save').textContent = 'Saving…'; showError($('#editor-error'), null);
+  $('#editor-form').setAttribute('aria-busy', 'true');
+  $('#editor-form').querySelectorAll('button').forEach(node => node.disabled = true);
+  // Inert blocks input without dropping values from FormData.
+  $('#editor-fields').inert = true;
+  try { await state.action(); state.saving = false; closeEditor(true); }
+  catch (failure) { showError($('#editor-error'), failure); }
+  finally {
+    state.saving = false; $('#editor-fields').inert = false;
+    $('#editor-form').querySelectorAll('button').forEach(node => node.disabled = false);
+    $('#editor-form').setAttribute('aria-busy', 'false'); $('#editor-save').textContent = state.saveText;
+    setBusy(state.list, false);
   }
 });
-
-async function loadAllData() {
-  const { data: lists, error } = await supabaseClient
-    .from("lists")
-    .select("id,title");
-
-  if (error) console.error(error);
-
-  if (lists) {
-    for (let l of lists) {
-      const key = Object.keys(LIST_IDS).find(k => LIST_IDS[k] === l.id);
-      if (key && TITLE_SPAN_IDS[key]) {
-        const el = document.getElementById(TITLE_SPAN_IDS[key]);
-        if (el) el.textContent = l.title;
-      }
-    }
-  }
-
-  loadAllTasks();
+editor.addEventListener('cancel', event => { event.preventDefault(); closeEditor(); });
+$('#editor-close').addEventListener('click', () => closeEditor());
+$('#editor-cancel').addEventListener('click', () => closeEditor());
+$('#discard-changes').addEventListener('click', () => closeEditor(true));
+$('#keep-editing').addEventListener('click', () => { $('#discard-panel').hidden = true; $('#editor-fields').querySelector('input, textarea')?.focus(); });
+$('#reload-all').addEventListener('click', () => loadAll());
+function hasDrafts() { return [...cards.values()].some(view => Object.values(formValues(view.form)).some(Boolean)); }
+window.addEventListener('beforeunload', event => {
+  if (hasDrafts() || store?.pending.size || dialogState?.saving || (dialogState && snapshot() !== dialogState.initial)) { event.preventDefault(); event.returnValue = ''; }
+});
+$('#today-label').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+if (demo || readOnly) {
+  $('#mode-notice').hidden = false;
+  $('#mode-notice').textContent = demo ? 'SAFE DEMO · Sample tasks only. Try anything; reload resets your changes. Your Supabase data is untouched.' : 'LIVE PREVIEW · Read only. Your production tasks cannot be changed from this local preview.';
 }
-
-async function loadAllTasks() {
-  for (const [key, listId] of Object.entries(LIST_IDS)) {
-    const { data: tasks, error } = await supabaseClient
-      .from("tasks")
-      .select("*")
-      .eq("list_id", listId)
-      // Urgent items first, then dates.
-      .order("urgency", { ascending: false, nullsFirst: false })
-      .order("due_date", { ascending: true, nullsFirst: false });
-
-    if (error) {
-      console.error(error);
-      continue;
-    }
-
-    const ul = document.getElementById(UL_IDS[key]);
-    if (!ul) continue;
-
-    ul.innerHTML = "";
-
-    tasks.forEach(task => {
-      // Row container (grid: 75% task | 25% due | auto button)
-      const li = document.createElement("li");
-      li.classList.add("task-item");
-
-      // Task column
-      const taskCol = document.createElement("div");
-      taskCol.classList.add("task-col");
-      taskCol.textContent = task.content;
-      li.appendChild(taskCol);
-
-      // Due column with color logic
-      const dueCol = document.createElement("div");
-      dueCol.classList.add("due-col");
-
-      // Prefer urgency display if present; otherwise show date.
-      if (task.urgency) {
-        dueCol.textContent = `U${task.urgency}`;
-        if (task.urgency === 3) dueCol.style.color = "red";
-        else if (task.urgency === 2) dueCol.style.color = "orange";
-        else dueCol.style.color = "grey";
-      } else if (task.due_date) {
-        const parsed = parseFlexibleDate(task.due_date);
-
-        if (parsed) {
-          // small cards keys
-          const smallKeys = [
-            "discrete", "calc", "cyber", "topics",
-            "other1", "other2", "other3", "other4",
-            "other5", "other6", "other7", "other8"
-          ];
-
-          if (smallKeys.includes(key)) {
-            dueCol.textContent = formatShortDate(parsed);
-
-            // fallback to ultra short if overflow
-            setTimeout(() => {
-              if (dueCol.scrollWidth > dueCol.clientWidth) {
-                dueCol.textContent = formatUltraShortDate(parsed);
-              }
-            }, 0);
-          } else {
-            dueCol.textContent = formatLongNoYearWithOrdinal(parsed);
-          }
-
-          // color logic (expanded system)
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          const in3Days = new Date(today); in3Days.setDate(today.getDate() + 3);
-          const in1Week = new Date(today); in1Week.setDate(today.getDate() + 7);
-          const in2Weeks = new Date(today); in2Weeks.setDate(today.getDate() + 14);
-
-          if (parsed < today) {
-            dueCol.style.color = "red";        // overdue
-          } else if (+parsed === +today) {
-            dueCol.style.color = "red";        // due today
-          } else if (parsed <= in3Days) {
-            dueCol.style.color = "orange";     // within 3 days
-          } else if (parsed <= in1Week) {
-            dueCol.style.color = "gold";       // within 1 week
-          } else if (parsed <= in2Weeks) {
-            dueCol.style.color = "blue";       // within 2 weeks
-          } else {
-            dueCol.style.color = "grey";       // later
-          }
-        }
-      }
-
-      li.appendChild(dueCol);
-
-      // Edit button
-      const editBtn = document.createElement("button");
-      editBtn.textContent = "✎";
-      editBtn.classList.add("edit");
-      editBtn.onclick = async function () {
-        const newContent = prompt("Edit task:", task.content ?? "");
-        if (newContent === null) return; // user cancelled
-
-        const existing = task.urgency ? String(task.urgency) : (task.due_date ?? "");
-        const newDueOrUrgency = prompt(
-          "Edit due date (MM/DD) OR urgency (1-3) OR blank:",
-          existing
-        );
-        if (newDueOrUrgency === null) return; // user cancelled
-
-        const u = parseUrgency(newDueOrUrgency);
-        const newDue = (u ? null : (newDueOrUrgency || "").trim() || null);
-
-        const { error } = await supabaseClient
-          .from("tasks")
-          .update({
-            content: newContent.trim(),
-            due_date: newDue,
-            urgency: u
-          })
-          .eq("id", task.id);
-
-        if (error) {
-          console.error("Error updating task:", error);
-          alert("Could not save task edits to Supabase!");
-          return;
-        }
-
-        loadAllTasks(); // refresh UI
-      };
-      li.appendChild(editBtn);
-
-      // Delete button (red X)
-      const btn = document.createElement("button");
-      btn.textContent = "✖";
-      btn.classList.add("done");
-      btn.onclick = async function () {
-        await supabaseClient.from("tasks").delete().eq("id", task.id);
-        li.remove();
-      };
-      li.appendChild(btn);
-
-      ul.appendChild(li);
-    });
-  }
-}
-
-// ---------- Actions ----------
-async function addTask(listId, inputId, dateId, ulId, maxItems) {
-  const inputEl = document.getElementById(inputId);
-  const dateEl  = document.getElementById(dateId);
-
-  const content = (inputEl?.value || "").trim();
-  const raw = (dateEl?.value || "").trim(); // date text or urgency number
-  const mode = getDueModeForInputId(dateId);
-
-  if (!content) return;
-
-  const ul = document.getElementById(ulId);
-  if (maxItems && ul && ul.children.length >= maxItems) {
-    alert("Max items reached!");
-    return;
-  }
-
-  let due_date = null;
-  let urgency = null;
-
-  if (mode === "urgency") {
-    urgency = parseUrgency(raw);
-    if (raw && urgency === null) {
-      alert("Urgency must be 1, 2, or 3.");
-      return;
-    }
-  } else {
-    due_date = raw || null;
-  }
-
-  const { error } = await supabaseClient.from("tasks").insert([
-    { list_id: listId, content, due_date, urgency }
-  ]);
-
-  if (!error) {
-    if (inputEl) inputEl.value = "";
-    if (dateEl)  dateEl.value  = "";
-    loadAllTasks();
-  } else {
-    console.error(error);
-  }
-}
-
-async function editTitle(spanId, listId) {
-  const span = document.getElementById(spanId);
-  if (!span) return;
-
-  const current = span.textContent;
-  const newTitle = prompt("Enter new title:", current);
-
-  if (newTitle !== null && newTitle.trim() !== "") {
-    span.textContent = newTitle.trim();
-
-    const { error } = await supabaseClient
-      .from("lists")
-      .update({ title: newTitle.trim() })
-      .eq("id", listId);
-
-    if (error) {
-      console.error("Error updating title:", error);
-      alert("Could not save title to Supabase!");
-    }
-  }
-}
+buildCards(); loadAll();
