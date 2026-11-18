@@ -17,7 +17,7 @@ npm run dev
 
 Open <http://127.0.0.1:4173/todo.html?demo>. All task and list mutations operate on invented, in-memory data. Reload resets sample records; preferences retain Compact/Expanded, last destination, list order and archived IDs. No task content is saved to browser storage. No Supabase or external script requests occur in demo mode.
 
-<http://127.0.0.1:4173/todo.html?source=live> loads actual lists **read-only**. Hosted mode uses public read/write access, as explicitly requested by the owner. Authentication is deferred. Local live previews remain read-only. Apply the metadata/capacity migration before publishing these assets.
+<http://127.0.0.1:4173/todo.html?source=live> requires a PIN session and loads actual lists **read-only**. Hosted mode uses the PIN-protected API for reads and writes. See [PIN activation](docs/pin-auth.md) before publishing these assets. Demo mode uses only invented data.
 
 ## Implemented
 

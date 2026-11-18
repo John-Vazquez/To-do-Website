@@ -1,0 +1,3 @@
+[functions.todo-api]
+# Opaque PIN sessions are checked by our handler, not Supabase Auth JWTs.
+verify_jwt = false

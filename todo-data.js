@@ -1,4 +1,4 @@
-import { LISTS } from './todo-config.js?v=20261030-3';
+import { LISTS } from './todo-config.js?v=20261118-1';
 
 export function parseDate(value, year = new Date().getFullYear()) {
   if (!value) return null;
@@ -19,23 +19,66 @@ export function dateInputValue(raw) {
   return date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : '';
 }
 
+export function normalizeTask(task) {
+  if (!task) return task;
+  return { ...task, ...(task.event_time ? { event_time: String(task.event_time).slice(0, 5) } : {}) };
+}
+
+export function isPastEvent(task, now = new Date()) {
+  const date = parseDate(task.due_date);
+  if (!date) return false;
+  if (task.event_time) {
+    const [hour, minute] = String(task.event_time).split(':').map(Number);
+    date.setHours(hour, minute, 0, 0);
+    return date < now;
+  }
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return date < today;
+}
+
+export function compareTaskDates(a, b) {
+  const date = task => +(parseDate(task.due_date) || Infinity);
+  const first = date(a), second = date(b);
+  const dates = first === second ? 0 : first < second ? -1 : 1;
+  return dates || String(a.event_time || '99:99').localeCompare(String(b.event_time || '99:99'));
+}
+
 export function sortTasks(tasks, mode = 'priority') {
-  const due = task => +(parseDate(task.due_date) || Infinity);
   const urgency = task => Number(task.urgency) || 0;
   return [...tasks].sort((a, b) => {
-    const dates = due(a) === due(b) ? 0 : due(a) < due(b) ? -1 : 1;
-    return (mode === 'date' ? dates || urgency(b) - urgency(a) : urgency(b) - urgency(a) || dates);
+    const dates = compareTaskDates(a, b);
+    return (['date', 'schedule'].includes(mode) ? dates || urgency(b) - urgency(a) : urgency(b) - urgency(a) || dates);
   });
 }
 
-export function validateTask(fields) {
+export function validateTask(fields, list = {}) {
   const content = fields.content.trim();
   if (!content) throw new Error('Enter a task before saving.');
   const urgency = fields.urgency === '' || fields.urgency == null ? null : Number(fields.urgency);
   if (urgency !== null && ![1, 2, 3].includes(urgency)) throw new Error('Urgency must be 1, 2, or 3.');
   const due_date = fields.due_date || null;
   if (due_date && (!/^\d{4}-\d{2}-\d{2}$/.test(due_date) || !parseDate(due_date))) throw new Error('Choose a valid due date.');
-  return { content, due_date, urgency };
+  const result = { content, due_date, urgency };
+  if (list.kind === 'schedule' && fields.focus_list) throw new Error('Only To-Do tasks can be pinned to a priority list.');
+  if (list.kind === 'schedule' && !due_date) throw new Error('Choose a date for this scheduled event.');
+  if ('event_time' in fields) {
+    const time = fields.event_time ? String(fields.event_time) : null;
+    if (time && !/^(?:[01]\d|2[0-3]):[0-5]\d(?::00)?$/.test(time)) throw new Error('Choose a valid event time.');
+    if (time && !due_date) throw new Error('Choose a date before adding a time.');
+    result.event_time = list.kind === 'todo' ? null : time?.slice(0, 5) || null;
+  }
+  if ('focus_list' in fields) {
+    if (fields.focus_list != null && fields.focus_list !== '' && !['doing', 'must'].includes(fields.focus_list)) throw new Error('Choose a valid priority list.');
+    result.focus_list = fields.focus_list || null;
+  }
+  return result;
+}
+
+function validateTaskPatch(task, fields, list = {}) {
+  const input = { ...task, ...fields };
+  if (!('due_date' in fields)) input.due_date = dateInputValue(task.due_date) || null;
+  const valid = validateTask(input, list);
+  return Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, key in valid ? valid[key] : value]));
 }
 
 async function checked(query) {
@@ -57,8 +100,13 @@ export function createSupabaseRepository(client, { readOnly = false } = {}) {
       if (page.length < 500) return rows;
     }
   }
+  const listColumns = 'id,title,is_archived,sort_order,category_id,kind';
   return {
-    lists: () => pages(() => client.from('lists').select('id,title,is_archived,sort_order').order('sort_order', { nullsFirst: false }).order('id')),
+    categories: () => pages(() => client.from('categories').select('id,title').order('title').order('id')),
+    async createCategory(title) { writable(); return checked(client.from('categories').insert([{ title: validTitle(title, 'category') }]).select('id,title').single()); },
+    async renameCategory(id, title) { writable(); return checked(client.from('categories').update({ title: validTitle(title, 'category') }).eq('id', id).select('id,title').single()); },
+    async focusTasks(focus) { return activeTasks(await pages(() => client.from('tasks').select('*').eq('focus_list', focus).order('id'))); },
+    lists: () => pages(() => client.from('lists').select(listColumns).order('sort_order', { nullsFirst: false }).order('id')),
     tasks: listId => pages(() => client.from('tasks').select('*').eq('list_id', listId).order('id')),
     async create(listId, fields) {
       writable();
@@ -74,11 +122,17 @@ export function createSupabaseRepository(client, { readOnly = false } = {}) {
     },
     async rename(listId, title) {
       writable();
-      return checked(client.from('lists').update({ title }).eq('id', listId).select('id,title,is_archived,sort_order').single());
+      return checked(client.from('lists').update({ title }).eq('id', listId).select(listColumns).single());
     },
-    async createList(id, title) {
+    async createList(id, title, options = {}) {
       writable();
-      return checked(client.from('lists').insert([{ id, title }]).select('id,title,is_archived,sort_order').single());
+      if (typeof title !== 'string') { options = title || {}; title = id; id = crypto.randomUUID(); }
+      const fields = validListFields({ title, category_id: options.category_id ?? null, kind: options.kind || 'todo' });
+      return checked(client.from('lists').insert([{ id, ...fields }]).select(listColumns).single());
+    },
+    async updateList(id, fields) {
+      writable();
+      return checked(client.from('lists').update(validListFields(fields)).eq('id', id).select(listColumns).single());
     },
     async saveListMetadata(rows) {
       writable();
@@ -101,11 +155,27 @@ export function createSupabaseRepository(client, { readOnly = false } = {}) {
   };
 }
 
+function validTitle(title, type = 'list') {
+  if (typeof title !== 'string' || !title.trim()) throw new Error(`Enter a ${type} title.`);
+  return title.trim();
+}
+
+function validListFields(fields) {
+  const result = {};
+  if ('title' in fields) result.title = validTitle(fields.title);
+  if ('category_id' in fields) result.category_id = fields.category_id || null;
+  if ('kind' in fields) {
+    if (!['todo', 'schedule'].includes(fields.kind)) throw new Error('Choose To-Do or Schedule for the list type.');
+    result.kind = fields.kind;
+  }
+  return result;
+}
+
 export function arrangeLists(rows) {
   const existing = new Map(rows.map(row => [row.id, row]));
-  const known = LISTS.map(list => ({ ...list, title: list.fixed ? list.title : existing.get(list.id)?.title ?? list.title, archived: !list.fixed && existing.get(list.id)?.is_archived === true, sort_order: existing.get(list.id)?.sort_order, syncedMetadata: Object.hasOwn(existing.get(list.id) || {}, 'is_archived'), available: existing.has(list.id) }));
+  const known = LISTS.map(list => ({ ...list, category_id: list.fixed ? null : existing.get(list.id)?.category_id ?? null, kind: list.fixed ? 'todo' : existing.get(list.id)?.kind || 'todo', title: list.fixed ? list.title : existing.get(list.id)?.title ?? list.title, archived: !list.fixed && existing.get(list.id)?.is_archived === true, sort_order: existing.get(list.id)?.sort_order, syncedMetadata: Object.hasOwn(existing.get(list.id) || {}, 'is_archived'), available: existing.has(list.id) }));
   const ids = new Set(LISTS.map(list => list.id));
-  const extra = rows.filter(row => !ids.has(row.id)).sort((a, b) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity) || String(a.id).localeCompare(String(b.id))).map(row => ({ ...row, key: row.id, archived: row.is_archived === true, syncedMetadata:Object.hasOwn(row,'is_archived'), available: true }));
+  const extra = rows.filter(row => !ids.has(row.id)).sort((a, b) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity) || String(a.id).localeCompare(String(b.id))).map(row => ({ ...row, category_id: row.category_id ?? null, kind: row.kind || 'todo', key: row.id, archived: row.is_archived === true, syncedMetadata:Object.hasOwn(row,'is_archived'), available: true }));
   return [...known, ...extra];
 }
 
@@ -119,7 +189,7 @@ export class TaskStore {
     this.uncertainCreates = new Set();
   }
   async load(listId) {
-    const tasks = await this.repository.tasks(listId);
+    const tasks = (await this.repository.tasks(listId)).map(normalizeTask);
     this.tasks.set(listId, tasks);
     this.uncertainCreates.delete(listId);
     return tasks;
@@ -129,24 +199,38 @@ export class TaskStore {
     const ids = [...new Set(listIds)].sort();
     if (ids.some(id => this.pending.has(id))) throw new Error('A change to this list is still saving. Please wait.');
     ids.forEach(id => this.pending.add(id));
-    const acquire = index => index === ids.length ? action() : this.lock(ids[index], () => acquire(index + 1));
+    // Priority capacity spans lists, so writes that can add an active Must task
+    // share one cross-tab lock instead of nesting per-list locks.
+    const locks = ids.includes('__focus_must__') ? ['__focus_must__'] : ids;
+    const acquire = index => index === locks.length ? action() : this.lock(locks[index], () => acquire(index + 1));
     try { return await acquire(0); }
     finally { ids.forEach(id => this.pending.delete(id)); }
   }
+  async checkMustCapacity(task, fields, destination) {
+    const mustId = LISTS.find(list => list.key === 'must').id;
+    const active = (fields.is_done ?? task?.is_done) !== true;
+    const focus = 'focus_list' in fields ? fields.focus_list : task?.focus_list;
+    const counts = active && (destination.id === mustId || (destination.kind !== 'schedule' && focus === 'must'));
+    if (!counts) return;
+    const physical = await this.repository.tasks(mustId);
+    if (this.tasks.has(mustId)) this.tasks.set(mustId, physical.map(normalizeTask));
+    const pinned = this.repository.focusTasks ? await this.repository.focusTasks('must') : [...this.tasks.values()].flat().filter(row => row.focus_list === 'must');
+    const rows = new Map([...physical, ...pinned].filter(row => row.is_done !== true && row.id !== task?.id).map(row => [row.id, row]));
+    if (rows.size >= 3) throw new Error('Must Do Today is limited to 3 active tasks. Complete, unpin, or move one first.');
+  }
+  async setFocus(task, focus, list = {}) {
+    if (list.kind === 'schedule') throw new Error('Only To-Do tasks can be pinned to a priority list.');
+    return this.update(task, { focus_list: focus || null });
+  }
   async create(list, fields) {
-    const valid = validateTask(fields);
+    const valid = validateTask(fields, list);
     if (!this.tasks.has(list.id)) throw new Error('Load this list before adding a task.');
     if (this.uncertainCreates.has(list.id)) throw new Error('Reload this list and check whether the previous task was saved before trying again.');
-    return this.exclusive(list.id, async () => {
-      if (list.limit) {
-        // Refresh under the browser's cross-tab lock before counting.
-        const latest = await this.repository.tasks(list.id);
-        this.tasks.set(list.id, latest);
-        if (activeTasks(latest).length >= list.limit) throw new Error('Must Do Today is limited to 3 active tasks. Complete or move one first.');
-      }
+    return this.exclusiveMany([list.id, '__focus_must__'], async () => {
+      await this.checkMustCapacity(null, valid, list);
       let task;
       try {
-        task = await this.repository.create(list.id, valid);
+        task = normalizeTask(await this.repository.create(list.id, valid));
         if (!task?.id || task.list_id !== list.id) throw new Error('The saved task could not be confirmed.');
       } catch (error) {
         // No automatic INSERT retries: the server may have committed before a
@@ -160,8 +244,10 @@ export class TaskStore {
   }
   async update(task, fields) {
     if ('list_id' in fields || 'is_done' in fields) throw new Error('Use changeTask for moves or completion so capacity is checked.');
-    return this.exclusive(task.list_id, async () => {
-      const saved = await this.repository.update(task, fields);
+    return this.exclusiveMany([task.list_id, '__focus_must__'], async () => {
+      await this.checkMustCapacity(task, fields, { id: task.list_id });
+      const patch = validateTaskPatch(task, fields);
+      const saved = normalizeTask(await this.repository.update(task, patch));
       if (saved?.id !== task.id || saved.list_id !== task.list_id) throw new Error('No matching task was saved. Reload and try again.');
       this.tasks.set(task.list_id, this.tasks.get(task.list_id).map(row => row.id === task.id ? saved : row));
       return saved;
@@ -183,17 +269,17 @@ export class TaskStore {
     });
   }
   async changeTask(task, fields, destination) {
-    if (!destination?.available || destination.archived) throw new Error('Choose an available, unarchived destination list.');
+    if (!destination?.available || (destination.archived && destination.id !== task.list_id)) throw new Error('Choose an available, unarchived destination list.');
+    if (destination.archived && task.is_done === true && fields.is_done === false) throw new Error('Restore this archived list before reopening its tasks.');
     if (!this.tasks.has(destination.id)) throw new Error('Load the destination list before moving a task.');
-    return this.exclusiveMany([task.list_id, destination.id], async () => {
-      const becomingActive = (fields.is_done ?? task.is_done) !== true;
-      if (destination.limit && becomingActive && (task.list_id !== destination.id || task.is_done === true)) {
-        const latest = await this.repository.tasks(destination.id);
-        this.tasks.set(destination.id, latest);
-        if (activeTasks(latest).filter(row => row.id !== task.id).length >= destination.limit) throw new Error('Must Do Today is limited to 3 active tasks. Complete or move one first.');
-      }
-      const patch = { ...fields, ...(destination.id !== task.list_id ? { list_id: destination.id } : {}) };
-      const saved = await this.repository.update(task, patch);
+    return this.exclusiveMany([task.list_id, destination.id, '__focus_must__'], async () => {
+      await this.checkMustCapacity(task, fields, destination);
+      const moving = destination.id !== task.list_id;
+      const edited = ['content', 'due_date', 'event_time', 'urgency', 'focus_list'].some(key => key in fields);
+      const valid = edited ? validateTaskPatch(task, { ...fields, ...(moving && destination.kind === 'schedule' ? { focus_list: null } : {}) }, destination) : {};
+      if (destination.kind === 'schedule' && !(fields.due_date ?? task.due_date)) throw new Error('Choose a date before moving this task to a Schedule.');
+      const patch = { ...fields, ...valid, ...(moving ? { list_id: destination.id, ...(destination.kind === 'todo' ? { event_time: null } : {}), ...(destination.kind === 'schedule' ? { focus_list: null } : {}) } : {}) };
+      const saved = normalizeTask(await this.repository.update(task, patch));
       if (saved?.id !== task.id || saved.list_id !== destination.id) throw new Error('No matching task was saved. Reload and try again.');
       this.tasks.set(task.list_id, this.tasks.get(task.list_id).filter(row => row.id !== task.id));
       this.tasks.set(destination.id, [...this.tasks.get(destination.id), saved]);
@@ -213,13 +299,14 @@ export class TaskStore {
     }
     return completed;
   }
-  async createList(id, title) {
+  async createList(id, title, options = {}) {
+    if (typeof title !== 'string') { options = title || {}; title = id; id = crypto.randomUUID(); }
     if (!title.trim()) throw new Error('Enter a list title.');
     return this.exclusive('__lists__', async () => {
-      const saved = await this.repository.createList(id, title.trim());
+      const saved = await this.repository.createList(id, title.trim(), options);
       if (saved?.id !== id || saved.title !== title.trim()) throw new Error('List creation could not be confirmed. Refresh before retrying.');
       this.tasks.set(id, []);
-      return { ...saved, key: id, available: true };
+      return { ...saved, category_id: saved.category_id ?? null, kind: saved.kind || options.kind || 'todo', key: id, available: true };
     });
   }
 }
@@ -232,11 +319,12 @@ export function upcomingTasks(lists, tasks, now = new Date()) {
   for (const list of lists.filter(list => !list.archived)) {
     for (const task of sortTasks(activeTasks(tasks.get(list.id) || []), 'date')) {
       const date = parseDate(task.due_date); if (!date) continue;
-      const group = date < today ? 'Overdue' : +date === +today ? 'Today' : date <= week ? 'Next 7 days' : 'Later';
+      const group = list.kind === 'schedule' && isPastEvent(task, now) ? 'Past events' : date < today ? 'Overdue' : +date === +today ? 'Today' : date <= week ? 'Next 7 days' : 'Later';
+      groups[group] ||= [];
       groups[group].push({ list, task });
     }
   }
-  for (const rows of Object.values(groups)) rows.sort((a, b) => +parseDate(a.task.due_date) - +parseDate(b.task.due_date));
+  for (const rows of Object.values(groups)) rows.sort((a, b) => compareTaskDates(a.task, b.task));
   return groups;
 }
 export function searchTasks(lists, tasks, query, includeDone = false) {

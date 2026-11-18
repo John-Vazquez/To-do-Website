@@ -4,10 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "setup-auth": "node scripts/setup-auth.mjs",
     "dev": "node scripts/serve.mjs",
     "test": "node --test tests/*.test.mjs && playwright test",
     "test:unit": "node --test tests/*.test.mjs",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "set-pin": "node scripts/set-pin.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.13",
